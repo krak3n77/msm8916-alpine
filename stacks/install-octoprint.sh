@@ -80,6 +80,12 @@ net.ipv4.ip_unprivileged_port_start=80
 SYSCTL
 sysctl -w net.ipv4.ip_unprivileged_port_start=80 || true
 
+log "[*] Allowing OctoPrint UI power controls via sudo..."
+cat > /etc/sudoers.d/octoprint <<'SUDOERS'
+octoprint ALL=(root) NOPASSWD: /sbin/rc-service octoprint restart, /sbin/reboot, /sbin/poweroff
+SUDOERS
+chmod 0440 /etc/sudoers.d/octoprint
+
 log "[*] Installing OpenRC service..."
 cat > /etc/init.d/octoprint <<'EOF'
 #!/sbin/openrc-run
@@ -132,4 +138,5 @@ log "    Service : /etc/init.d/octoprint (enabled in default runlevel)"
 log ""
 log "[*] Start now with: rc-service octoprint start"
 log "    Web UI  : http://<device-ip>/  (port 80)"
+log "    UI cmds : sudo rc-service octoprint restart | sudo reboot | sudo poweroff"
 log "    ffmpeg  : installed (webcam live monitoring; timelapse not configured)"

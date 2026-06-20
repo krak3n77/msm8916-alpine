@@ -10,7 +10,7 @@ dongle with constrained memory (~384 MB usable). Read this before installing.
 | OctoPrint core | ✓ |
 | OctoPi image | ✗ — this is Alpine Linux, not OctoPi |
 | Docker | ✗ — intentionally avoided; too heavy for ~384 MB RAM |
-| Webcam / MJPEG streaming | ✗ — out of scope for v1 |
+| Webcam / live monitoring | Optional — install a lightweight plugin; no timelapse by default |
 | Pre-installed plugins | ✗ — OctoPrint core only |
 | LTE modem | ✗ — disabled in the OctoPrint DTB profile to reclaim ~86 MB RAM |
 
@@ -30,6 +30,18 @@ device is required.
 
 **Keep plugins light.** Each installed OctoPrint plugin consumes RAM at startup. Avoid heavy
 plugins (OctoPrint-Dashboard, timelapse, etc.) on this device.
+
+## Interesting plugins
+
+Install these manually from OctoPrint's Plugin Manager; they are not preinstalled in the image.
+
+- **Resource Monitor** — useful on this low-RAM device. Install it from OctoPrint's plugin list and watch RAM, CPU, `/run`, and rootfs while printing.
+- **OctoPrint-RTSP** — for camera monitoring via RTSP:
+  ```text
+  https://github.com/soopahfly/OctoPrint-RTSP/archive/v1.0.3.zip
+  ```
+
+Keep camera use to live monitoring first. Avoid timelapse unless idle RAM/CPU during real prints still looks safe.
 
 ## USB and WiFi — read this first
 

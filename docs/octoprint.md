@@ -150,6 +150,23 @@ rc-service octoprint status
 tail -f /var/log/octoprint/octoprint.log
 ```
 
+## OctoPrint UI system commands
+
+Configure these in OctoPrint → Settings → Server → Commands:
+
+```bash
+# Restart OctoPrint
+sudo rc-service octoprint restart
+
+# Restart the device
+sudo reboot
+
+# Power off the device
+sudo poweroff
+```
+
+The OctoPrint installer grants passwordless sudo only for these three commands.
+
 ## Disable / uninstall
 
 ```bash

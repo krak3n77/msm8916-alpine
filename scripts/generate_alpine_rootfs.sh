@@ -1,6 +1,19 @@
 #!/bin/bash
 set -euo pipefail
 
+# ponytail: load order: default profile → selected profile → local overrides
+[ -f ./profiles/default.env ] && source ./profiles/default.env
+
+if [ -n "${PROFILE:-}" ]; then
+    _PROFILE_FILE="./profiles/${PROFILE}.env"
+    if [ ! -f "$_PROFILE_FILE" ]; then
+        _AVAILABLE=$(ls ./profiles/*.env 2>/dev/null | xargs -n1 basename | sed 's/\.env$//' | grep -v '^default$' | tr '\n' ' ')
+        echo "ERROR: Unknown profile '${PROFILE}'. Available: ${_AVAILABLE:-none}"
+        exit 1
+    fi
+    source "$_PROFILE_FILE"
+fi
+
 [ -f ./variables.env ] && source ./variables.env
 
 # Configuration
@@ -41,6 +54,7 @@ if [ "$IS_ARM64" = "false" ]; then
     command -v qemu-aarch64-static >/dev/null || { echo "Falta qemu-aarch64-static"; exit 1; }
 fi
 
+echo "[*] Profile: ${PROFILE:-default}"
 echo "[*] Output directory: $OUT_DIR"
 echo "[*] Temporary staging: $STAGING"
 
@@ -333,7 +347,7 @@ tar -C "$CHROOT" \
 
 cp "$STAGING/alpine_rootfs.tgz" "$OUT_DIR/rootfs.tgz"
 
-echo "[+] OK: Alpine rootfs ready in $OUT_DIR"
+echo "[+] OK: Alpine rootfs ready in $OUT_DIR (profile: ${PROFILE:-default})"
 echo "    - Kernel: linux-postmarketos-qcom-msm8916 from ${PMOS_RELEASE}"
 echo "    - Docker: enabled and configured"
 echo "    - Chrony: enabled with NTP servers"

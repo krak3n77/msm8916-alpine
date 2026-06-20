@@ -1,3 +1,6 @@
+# ponytail: pass PROFILE=<name> on the make command line, e.g. make build PROFILE=octoprint
+export PROFILE ?=
+
 builder:
 	vagrant up
 	vagrant rsync

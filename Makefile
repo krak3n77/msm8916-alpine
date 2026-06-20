@@ -28,3 +28,6 @@ build: _check-env
 build-all: build
 	./scripts/generate_firmware.sh files/firmware.zip
 	./scripts/generate_gpt_table.sh files/gpt_both0.bin
+
+verify-octoprint:
+	./stacks/verify-octoprint.sh

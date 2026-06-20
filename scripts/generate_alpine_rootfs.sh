@@ -32,6 +32,7 @@ USERNAME="${USERNAME:-user}"
 DTB_FILE="${DTB_FILE:-msm8916-yiming-uz801v3.dtb}"
 USB0_IP="${USB0_IP:-192.168.42.1/24}"
 USB_GADGET_OTG="${USB_GADGET_OTG:-no}"
+USB_GADGET_ENABLED="${USB_GADGET_ENABLED:-yes}"
 OCTOPRINT_PREINSTALL="${OCTOPRINT_PREINSTALL:-no}"
 ZORAXY_PREINSTALL="${ZORAXY_PREINSTALL:-no}"
 DOCKER_ENABLE="${DOCKER_ENABLE:-no}"
@@ -289,8 +290,10 @@ USE_NCM=1           # 1 = NCM (Linux/Mac), 0 = RNDIS (Windows)
 ENABLE_OTG=$([ "$USB_GADGET_OTG" = "yes" ] && echo 1 || echo 0)        # 1 = OTG Host mode, 0 = Gadget mode
 EOF
 
-# Enable USB gadget service
-chroot "$CHROOT" ash -l -c "rc-update add usb-gadget default" || true
+# Enable USB gadget service (controlled by USB_GADGET_ENABLED profile setting)
+if [ "$USB_GADGET_ENABLED" = "yes" ]; then
+    chroot "$CHROOT" ash -l -c "rc-update add usb-gadget default" || true
+fi
 
 # Expand rootfs on first boot
 install -Dm0755 configs/expand-rootfs/expand-rootfs.sh "$CHROOT/usr/sbin/expand-rootfs.sh"

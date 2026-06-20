@@ -33,7 +33,8 @@ DTB_FILE="${DTB_FILE:-msm8916-yiming-uz801v3.dtb}"
 USB0_IP="${USB0_IP:-192.168.42.1/24}"
 USB_GADGET_OTG="${USB_GADGET_OTG:-no}"
 OCTOPRINT_PREINSTALL="${OCTOPRINT_PREINSTALL:-no}"
-COPY_STACK_INSTALLERS="${COPY_STACK_INSTALLERS:-yes}"
+ZORAXY_PREINSTALL="${ZORAXY_PREINSTALL:-no}"
+DOCKER_ENABLE="${DOCKER_ENABLE:-no}"
 
 # Required: password must be set
 [ -z "${PASSWORD:-}" ] && {
@@ -131,9 +132,6 @@ echo ${USERNAME}:${PASSWORD}::::/home/${USERNAME}:/bin/bash | newusers
 printf 'PS1=\"\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]$ \"\n' > /home/${USERNAME}/.bash_profile
 chown ${USERNAME}:${USERNAME} /home/${USERNAME}/.bash_profile
 
-# Add user to docker group
-addgroup ${USERNAME} docker
-
 # Enable system services
 rc-update add devfs sysinit
 rc-update add dmesg sysinit
@@ -164,10 +162,14 @@ $(for svc in ${SERVICES_AUTOSTART:-}; do echo "rc-update add $svc default"; done
 # Sudo config
 echo "${USERNAME} ALL=(ALL:ALL) NOPASSWD: ALL" > "$CHROOT/etc/sudoers.d/${USERNAME}"
 
-# Docker configuration
-echo "[*] Configuring Docker..."
-mkdir -p "$CHROOT/etc/docker"
-cat > "$CHROOT/etc/docker/daemon.json" <<'DOCKEREOF'
+# Docker install + configuration (profile-driven)
+if [ "$DOCKER_ENABLE" = "yes" ]; then
+    echo "[*] Installing Docker..."
+    chroot "$CHROOT" ash -l -c "apk add --no-cache --no-interactive docker"
+    chroot "$CHROOT" ash -l -c "addgroup ${USERNAME} docker; rc-update add docker default"
+    echo "[*] Configuring Docker..."
+    mkdir -p "$CHROOT/etc/docker"
+    cat > "$CHROOT/etc/docker/daemon.json" <<'DOCKEREOF'
 {
   "log-driver": "json-file",
   "log-opts": {
@@ -178,6 +180,7 @@ cat > "$CHROOT/etc/docker/daemon.json" <<'DOCKEREOF'
   "iptables": true
 }
 DOCKEREOF
+fi
 
 # Chrony configuration
 echo "[*] Configuring Chrony..."
@@ -316,17 +319,12 @@ if [ "$OCTOPRINT_PREINSTALL" = "yes" ]; then
     rm -f "$CHROOT/tmp/install-octoprint.sh"
 fi
 
-# Copy install scripts to user home for first boot
-if [ "$COPY_STACK_INSTALLERS" = "yes" ]; then
-    for script in stacks/install-*.sh; do
-        [ -f "$script" ] || continue
-        name="$(basename "$script")"
-        echo "[*] Copying $name..."
-        cp "$script" "$CHROOT/home/${USERNAME}/$name"
-        chroot "$CHROOT" ash -l -c "chmod +x /home/${USERNAME}/$name && chown ${USERNAME}:${USERNAME} /home/${USERNAME}/$name"
-    done
-else
-    echo "[*] Not copying stack install scripts"
+# Optional Zoraxy appliance preinstall
+if [ "$ZORAXY_PREINSTALL" = "yes" ]; then
+    echo "[*] Preinstalling Zoraxy..."
+    install -Dm0755 stacks/install-zoraxy.sh "$CHROOT/tmp/install-zoraxy.sh"
+    chroot "$CHROOT" bash /tmp/install-zoraxy.sh
+    rm -f "$CHROOT/tmp/install-zoraxy.sh"
 fi
 
 # Create tarball
@@ -349,9 +347,10 @@ cp "$STAGING/alpine_rootfs.tgz" "$OUT_DIR/rootfs.tgz"
 
 echo "[+] OK: Alpine rootfs ready in $OUT_DIR (profile: ${PROFILE:-default})"
 echo "    - Kernel: linux-postmarketos-qcom-msm8916 from ${PMOS_RELEASE}"
-echo "    - Docker: enabled and configured"
+echo "    - Docker: ${DOCKER_ENABLE}"
+echo "    - OctoPrint preinstalled: ${OCTOPRINT_PREINSTALL}"
+echo "    - Zoraxy preinstalled: ${ZORAXY_PREINSTALL}"
 echo "    - Chrony: enabled with NTP servers"
-echo "    - User '${USERNAME}' in docker group"
 echo "    - DTB: ${DTB_FILE}"
 echo "    - $OUT_DIR/rootfs/ (directory)"
 echo "    - $OUT_DIR/rootfs.tgz (tarball)"

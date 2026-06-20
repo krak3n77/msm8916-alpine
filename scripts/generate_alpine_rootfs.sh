@@ -298,7 +298,7 @@ chmod +x "$CHROOT/etc/local.d/zram.start"
 if [ "$OCTOPRINT_PREINSTALL" = "yes" ]; then
     echo "[*] Preinstalling OctoPrint..."
     install -Dm0755 stacks/install-octoprint.sh "$CHROOT/tmp/install-octoprint.sh"
-    chroot "$CHROOT" bash /tmp/install-octoprint.sh
+    chroot "$CHROOT" bash /tmp/install-octoprint.sh -y
     rm -f "$CHROOT/tmp/install-octoprint.sh"
 fi
 

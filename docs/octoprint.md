@@ -122,11 +122,11 @@ Install takes **10–20 minutes** on the dongle (slow single-core pip build).
 
 ## Access
 
-OctoPrint binds to all interfaces on **port 5000**.
+OctoPrint binds to all interfaces on **port 80**.
 
 ```bash
 # From your laptop — use the dongle's WiFi IP
-http://192.168.1.XXX:5000
+http://192.168.1.XXX
 
 # Find the WiFi IP
 ssh user@192.168.42.1   # USB gadget (only works before OTG switch)
@@ -170,7 +170,7 @@ deluser octoprint
 |---|---|
 | No `/dev/ttyUSB0` or `/dev/ttyACM0` | `dmesg | tail -20` — cable, OTG mode, printer power |
 | USB gadget lost after OTG switch | Expected — connect via WiFi instead |
-| OctoPrint unreachable on port 5000 | `rc-service octoprint status`, check logs |
+| OctoPrint unreachable on port 80 | `rc-service octoprint status`, check logs |
 | OOM / service killed | `free -m`, `dmesg | grep -i oom` — disable heavy plugins, confirm OctoPrint DTB profile |
 | Modem still present | Wrong DTB loaded — check `extlinux.conf` FDT line |
 | Install fails mid-way | Rerun `sudo ~/install-octoprint.sh` — idempotent |

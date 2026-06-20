@@ -23,7 +23,7 @@ run_quiet() { "$@"; }
 [ "$(id -u)" -eq 0 ] || { echo "ERROR: run as root"; exit 1; }
 
 log "[*] Installing system dependencies..."
-run_quiet apk add --no-cache --no-interactive python3 python3-dev py3-netifaces gcc musl-dev libffi-dev openssl-dev linux-headers
+run_quiet apk add --no-cache --no-interactive python3 python3-dev py3-netifaces gcc musl-dev libffi-dev openssl-dev linux-headers ffmpeg
 
 # Create dedicated non-root service user/group if not present
 if ! getent group "$OCTOPRINT_USER" >/dev/null; then
@@ -72,6 +72,14 @@ run_quiet "$VENV_DIR/bin/pip" install --quiet "OctoPrint==$LATEST"
 echo "$LATEST" > "$VERSION_FILE"
 chown -R "$OCTOPRINT_USER:$OCTOPRINT_USER" "$INSTALL_DIR" "$DATA_DIR"
 
+log "[*] Allowing unprivileged bind to port 80 (host-wide sysctl; single-purpose appliance)..."
+# ponytail: host-wide sysctl — lets any non-root process bind >=80; acceptable on a single-purpose appliance
+mkdir -p /etc/sysctl.d
+cat > /etc/sysctl.d/50-octoprint.conf <<'SYSCTL'
+net.ipv4.ip_unprivileged_port_start=80
+SYSCTL
+sysctl -w net.ipv4.ip_unprivileged_port_start=80 || true
+
 log "[*] Installing OpenRC service..."
 cat > /etc/init.d/octoprint <<'EOF'
 #!/sbin/openrc-run
@@ -85,7 +93,7 @@ VENV_DIR="/opt/octoprint/venv"
 DATA_DIR="/var/lib/octoprint"
 
 command="$VENV_DIR/bin/octoprint"
-command_args="serve --host 0.0.0.0 --port 5000 --basedir $DATA_DIR"
+command_args="serve --host 0.0.0.0 --port 80 --basedir $DATA_DIR"
 command_user="$OCTOPRINT_USER"
 command_background=true
 pidfile="/run/${RC_SVCNAME}.pid"
@@ -123,3 +131,5 @@ log ""
 log "    Service : /etc/init.d/octoprint (enabled in default runlevel)"
 log ""
 log "[*] Start now with: rc-service octoprint start"
+log "    Web UI  : http://<device-ip>/  (port 80)"
+log "    ffmpeg  : installed (webcam live monitoring; timelapse not configured)"

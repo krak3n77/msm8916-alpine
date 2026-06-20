@@ -18,6 +18,8 @@ if ! id "$OCTOPRINT_USER" &>/dev/null; then
     echo "[*] Creating user '$OCTOPRINT_USER'..."
     adduser -S -D -H -h "$DATA_DIR" -s /sbin/nologin "$OCTOPRINT_USER"
 fi
+# ponytail: addgroup is idempotent on Alpine (no-op if already a member)
+addgroup "$OCTOPRINT_USER" dialout && echo "[*] '$OCTOPRINT_USER' is in the 'dialout' group (serial device access)." || echo "[!] WARNING: could not add '$OCTOPRINT_USER' to 'dialout' group."
 
 echo "[*] Fetching latest OctoPrint release..."
 LATEST=$(wget -qO- https://pypi.org/pypi/OctoPrint/json \

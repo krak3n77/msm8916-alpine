@@ -32,5 +32,15 @@ build-all: build
 	./scripts/generate_firmware.sh files/firmware.zip
 	./scripts/generate_gpt_table.sh files/gpt_both0.bin
 
+# ponytail: static aliases — add new profile here when profiles/*.env grows
+octoprint: _check-env
+	$(MAKE) build PROFILE=octoprint
+
+docker: _check-env
+	$(MAKE) build PROFILE=docker
+
+zoraxy: _check-env
+	$(MAKE) build PROFILE=zoraxy
+
 verify-octoprint:
 	./stacks/verify-octoprint.sh

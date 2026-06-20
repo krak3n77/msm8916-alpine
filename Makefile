@@ -48,13 +48,13 @@ build-all: build
 
 # ponytail: static aliases — add new profile here when profiles/*.env grows
 octoprint: _check-env
-	$(MAKE) build PROFILE=octoprint
+	$(MAKE) build-all PROFILE=octoprint
 
 docker: _check-env
-	$(MAKE) build PROFILE=docker
+	$(MAKE) build-all PROFILE=docker
 
 zoraxy: _check-env
-	$(MAKE) build PROFILE=zoraxy
+	$(MAKE) build-all PROFILE=zoraxy
 
 verify-octoprint:
 	./stacks/verify-octoprint.sh

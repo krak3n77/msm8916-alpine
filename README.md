@@ -155,7 +155,7 @@ Output goes to `files/dtbs/`. See `dtbs/readme.md` for the list of precompiled f
 
 **Preferred — profile builds:**
 
-Pick an appliance profile. Run these commands **inside the builder VM** (via `make builder`) or in CI:
+Pick an appliance profile. Run these commands **inside the builder VM** (via `make builder`) or in CI; they build rootfs, boot image, `firmware.zip`, and GPT table:
 
 ```bash
 make octoprint   # OctoPrint: native 3D printer interface, no Docker
@@ -167,7 +167,7 @@ Profile images are **minimal**: only the packages and services for the chosen ap
 
 USB gadget tooling (`usb-gadget`, `/etc/usb-gadget.conf`) is present in **every** profile. The default mode (NCM/RNDIS/OTG) and whether the service auto-starts at boot are controlled by profile variables (`USB_GADGET_ENABLED`, `USB_GADGET_OTG`).
 
-> **Vagrant artifact flow:** Profile targets (`make octoprint`, `make docker`, `make zoraxy`) run `make build PROFILE=...` inside the VM or CI and do **not** call `make fetch`. After the build finishes, exit the VM and run `make fetch` on the host to copy artifacts. The host targets `make build-vm` / `make build-all-vm` handle the full cycle (up → build → fetch) automatically but are generic — they do not set a profile.
+> **Vagrant artifact flow:** Profile targets (`make octoprint`, `make docker`, `make zoraxy`) run `make build-all PROFILE=...` inside the VM or CI and do **not** call `make fetch`. After the build finishes, exit the VM and run `make fetch` on the host to copy artifacts. The host targets `make build-vm` / `make build-all-vm` handle the full cycle (up → build → fetch) automatically but are generic — they do not set a profile.
 
 ---
 

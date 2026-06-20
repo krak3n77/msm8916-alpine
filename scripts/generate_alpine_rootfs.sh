@@ -18,6 +18,9 @@ PMOS_MIRROR="${PMOS_MIRROR:-http://mirror.postmarketos.org/postmarketos}"
 USERNAME="${USERNAME:-user}"
 DTB_FILE="${DTB_FILE:-msm8916-yiming-uz801v3.dtb}"
 USB0_IP="${USB0_IP:-192.168.42.1/24}"
+USB_GADGET_OTG="${USB_GADGET_OTG:-no}"
+OCTOPRINT_PREINSTALL="${OCTOPRINT_PREINSTALL:-no}"
+COPY_STACK_INSTALLERS="${COPY_STACK_INSTALLERS:-yes}"
 
 # Required: password must be set
 [ -z "${PASSWORD:-}" ] && {
@@ -262,6 +265,12 @@ EOF
 # USB gadget
 install -Dm0755 configs/usb-gadget/usb-gadget.sh "$CHROOT/usr/sbin/usb-gadget"
 install -Dm0755 configs/usb-gadget/usb-gadget.init "$CHROOT/etc/init.d/usb-gadget"
+cat > "$CHROOT/etc/usb-gadget.conf" << EOF
+# MSM8916 USB Gadget Configuration
+
+USE_NCM=1           # 1 = NCM (Linux/Mac), 0 = RNDIS (Windows)
+ENABLE_OTG=$([ "$USB_GADGET_OTG" = "yes" ] && echo 1 || echo 0)        # 1 = OTG Host mode, 0 = Gadget mode
+EOF
 
 # Enable USB gadget service
 chroot "$CHROOT" ash -l -c "rc-update add usb-gadget default" || true
@@ -285,14 +294,26 @@ swapon /dev/zram0
 EOF
 chmod +x "$CHROOT/etc/local.d/zram.start"
 
+# Optional OctoPrint appliance preinstall
+if [ "$OCTOPRINT_PREINSTALL" = "yes" ]; then
+    echo "[*] Preinstalling OctoPrint..."
+    install -Dm0755 stacks/install-octoprint.sh "$CHROOT/tmp/install-octoprint.sh"
+    chroot "$CHROOT" bash /tmp/install-octoprint.sh
+    rm -f "$CHROOT/tmp/install-octoprint.sh"
+fi
+
 # Copy install scripts to user home for first boot
-for script in stacks/install-*.sh; do
-    [ -f "$script" ] || continue
-    name="$(basename "$script")"
-    echo "[*] Copying $name..."
-    cp "$script" "$CHROOT/home/${USERNAME}/$name"
-    chroot "$CHROOT" ash -l -c "chmod +x /home/${USERNAME}/$name && chown ${USERNAME}:${USERNAME} /home/${USERNAME}/$name"
-done
+if [ "$COPY_STACK_INSTALLERS" = "yes" ]; then
+    for script in stacks/install-*.sh; do
+        [ -f "$script" ] || continue
+        name="$(basename "$script")"
+        echo "[*] Copying $name..."
+        cp "$script" "$CHROOT/home/${USERNAME}/$name"
+        chroot "$CHROOT" ash -l -c "chmod +x /home/${USERNAME}/$name && chown ${USERNAME}:${USERNAME} /home/${USERNAME}/$name"
+    done
+else
+    echo "[*] Not copying stack install scripts"
+fi
 
 # Create tarball
 echo "[*] Creating tarball..."

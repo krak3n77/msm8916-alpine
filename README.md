@@ -262,7 +262,7 @@ Native OctoPrint core for a Creality Ender-3 V3 SE (or similar USB-serial printe
 sudo ~/install-octoprint.sh
 ```
 
-- Web UI: `http://<device-ip>/`
+- Web UI: `http://<device-ip>:5000`
 - Service: `rc-service octoprint start|stop|restart|status`
 - Logs: `/var/log/octoprint/octoprint.log`
 - Data: `/var/lib/octoprint`

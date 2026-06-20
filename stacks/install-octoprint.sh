@@ -28,7 +28,7 @@ echo "[*] Latest version: $LATEST"
 CURRENT=""
 [ -f "$VERSION_FILE" ] && CURRENT=$(cat "$VERSION_FILE")
 
-if [ "$CURRENT" = "$LATEST" ] && [ -x "$VENV_DIR/bin/octoprint" ]; then
+if [ "$CURRENT" = "$LATEST" ] && [ -x "$VENV_DIR/bin/octoprint" ] && [ -f "/etc/init.d/octoprint" ]; then
     echo "[+] OctoPrint $LATEST is already up to date, nothing to do."
     exit 0
 fi
@@ -51,6 +51,43 @@ echo "[*] Installing OctoPrint into venv (may take several minutes on this devic
 echo "$LATEST" > "$VERSION_FILE"
 chown -R "$OCTOPRINT_USER:$OCTOPRINT_USER" "$INSTALL_DIR" "$DATA_DIR"
 
+echo "[*] Installing OpenRC service..."
+cat > /etc/init.d/octoprint <<'EOF'
+#!/sbin/openrc-run
+# OpenRC service for OctoPrint
+
+name="octoprint"
+description="OctoPrint 3D printer web interface"
+
+OCTOPRINT_USER="octoprint"
+VENV_DIR="/opt/octoprint/venv"
+DATA_DIR="/var/lib/octoprint"
+
+command="$VENV_DIR/bin/octoprint"
+command_args="serve --host 0.0.0.0 --port 5000 --basedir $DATA_DIR"
+command_user="$OCTOPRINT_USER"
+command_background=true
+pidfile="/run/${RC_SVCNAME}.pid"
+output_log="/var/log/octoprint/octoprint.log"
+error_log="/var/log/octoprint/octoprint.log"
+
+depend() {
+    need net
+    after localmount
+}
+
+start_pre() {
+    if [ ! -x "$command" ]; then
+        eerror "OctoPrint not found at $command — run install-octoprint.sh first"
+        return 1
+    fi
+    mkdir -p /var/log/octoprint
+    chown "$OCTOPRINT_USER" /var/log/octoprint
+}
+EOF
+chmod 755 /etc/init.d/octoprint
+rc-update add octoprint default
+
 # ponytail: minimal sanity check - binary must be callable
 "$VENV_DIR/bin/octoprint" --version >/dev/null \
     && echo "[+] Installation verified." \
@@ -62,5 +99,6 @@ echo "    Venv    : $VENV_DIR"
 echo "    Data    : $DATA_DIR"
 echo "    Binary  : $VENV_DIR/bin/octoprint"
 echo ""
-echo "[!] Service not yet configured. Set up an OpenRC init script to start OctoPrint"
-echo "    as '$OCTOPRINT_USER' with: $VENV_DIR/bin/octoprint serve --host 0.0.0.0 --port 5000 --basedir $DATA_DIR"
+echo "    Service : /etc/init.d/octoprint (enabled in default runlevel)"
+echo ""
+echo "[*] Start now with: rc-service octoprint start"

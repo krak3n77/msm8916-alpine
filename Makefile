@@ -5,6 +5,20 @@ builder:
 	vagrant up
 	vagrant rsync
 	vagrant ssh -c "cd /app && sudo bash"
+	@echo "[msm8916] Tip: run 'make fetch' on the host to copy build artifacts to files/."
+
+# Non-interactive build from the host; fetch artifacts via SSH after the build.
+build-vm:
+	vagrant up
+	vagrant rsync
+	vagrant ssh -c "cd /app && sudo make build"
+	$(MAKE) fetch
+
+build-all-vm:
+	vagrant up
+	vagrant rsync
+	vagrant ssh -c "cd /app && sudo make build-all"
+	$(MAKE) fetch
 
 fetch:
 	@mkdir -p files

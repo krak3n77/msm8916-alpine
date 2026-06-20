@@ -153,6 +153,8 @@ Output goes to `files/dtbs/`. See `dtbs/readme.md` for the list of precompiled f
 
 ### 1. Build everything
 
+**Option A — interactive shell inside the VM:**
+
 ```bash
 # Open a shell in the builder VM (first time provisions automatically)
 make builder
@@ -163,10 +165,24 @@ make build
 # Or build everything including firmware.zip and GPT table
 make build-all
 
-# Exit the VM, then fetch artifacts to your Mac
+# Exit the VM
 exit
+
+# Back on the host — copy artifacts from the VM to host files/
 make fetch
 ```
+
+> **Note:** vagrant-qemu uses SLIRP user networking; NFS and shared folders are not
+> available. `make fetch` is the only way to copy artifacts to the host.
+
+**Option B — one-shot from the host (recommended, no interactive shell needed):**
+
+```bash
+make build-vm       # build inside VM and fetch artifacts automatically
+make build-all-vm   # same but includes firmware.zip and GPT table
+```
+
+`make fetch` is always safe to re-run — it overwrites artifacts with the latest build.
 
 **Build output** in `files/`:
 - `rootfs.bin` - Alpine rootfs sparse image

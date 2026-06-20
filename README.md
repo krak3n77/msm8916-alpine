@@ -153,6 +153,24 @@ Output goes to `files/dtbs/`. See `dtbs/readme.md` for the list of precompiled f
 
 ### 1. Build everything
 
+**Preferred — profile builds:**
+
+Pick an appliance profile. Run these commands **inside the builder VM** (via `make builder`) or in CI:
+
+```bash
+make octoprint   # OctoPrint: native 3D printer interface, no Docker
+make docker      # Docker-enabled base image
+make zoraxy      # Zoraxy: native reverse proxy, no Docker
+```
+
+Profile images are **minimal**: only the packages and services for the chosen appliance are installed. Installer scripts for other stacks are **not** copied to the device — the selected stack is wired in at build time.
+
+USB gadget tooling (`usb-gadget`, `/etc/usb-gadget.conf`) is present in **every** profile. The default mode (NCM/RNDIS/OTG) and whether the service auto-starts at boot are controlled by profile variables (`USB_GADGET_ENABLED`, `USB_GADGET_OTG`).
+
+> **Vagrant artifact flow:** Profile targets (`make octoprint`, `make docker`, `make zoraxy`) run `make build PROFILE=...` inside the VM or CI and do **not** call `make fetch`. After the build finishes, exit the VM and run `make fetch` on the host to copy artifacts. The host targets `make build-vm` / `make build-all-vm` handle the full cycle (up → build → fetch) automatically but are generic — they do not set a profile.
+
+---
+
 **Option A — interactive shell inside the VM:**
 
 ```bash
@@ -231,7 +249,10 @@ Password: (configured in variables.env)
 
 ## Optional Stacks
 
-The `stacks/` directory contains install scripts and Docker Compose files for optional services. Install scripts are automatically copied to `~/` on the device during the build, ready to run after first boot.
+The `stacks/` directory contains install scripts and Docker Compose files for optional services.
+
+- **Profile builds** (`make octoprint`, `make docker`, `make zoraxy`): the selected stack is preinstalled at build time. No installer scripts are left on the device.
+- **Base builds** (`make build`): install scripts are not copied automatically — copy and run them from the repo's `stacks/` directory as a manual/custom workflow, or customise `variables.env`.
 
 ### OctoPrint (3D printer interface)
 
@@ -249,9 +270,9 @@ sudo ~/install-octoprint.sh
 
 ### Zoraxy (Reverse Proxy)
 
-Zoraxy provides a reverse proxy with HTTPS termination and a web admin panel. It can be installed as a native service or as a Docker container.
+Zoraxy provides a reverse proxy with HTTPS termination and a web admin panel. The `zoraxy` profile installs it as a **native service** (no Docker required). A Docker Compose file is also available if the `docker` profile is selected.
 
-**Native install (recommended for low memory):**
+**Native install (default for the `zoraxy` profile):**
 ```bash
 sudo ~/install-zoraxy.sh
 ```
@@ -499,6 +520,36 @@ On first boot, the system will automatically:
 9. Sync time via Chrony (if installed)
 
 **Boot time:** ~30-45 seconds to full network connectivity
+
+## Profile Validation
+
+After flashing and first boot, confirm the selected profile is active:
+
+```bash
+# USB gadget tooling — present in every profile
+usb-gadget status
+
+# OctoPrint profile
+rc-service octoprint status        # should show 'started'
+ls /var/lib/octoprint/             # data directory exists
+
+# Docker profile
+rc-service docker status           # should show 'started'
+docker info                        # daemon responds
+
+# Zoraxy profile
+rc-service zoraxy status           # should show 'started'
+curl -s http://localhost:8000 | head -5   # admin panel responds
+
+# No stray installer scripts from unused stacks
+ls ~/install-*.sh 2>/dev/null || echo "clean — no unused installer scripts"
+```
+
+For an automated check of the OctoPrint profile, run inside the builder VM:
+
+```bash
+make verify-octoprint
+```
 
 ## Credits
 

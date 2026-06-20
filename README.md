@@ -217,6 +217,20 @@ Password: (configured in variables.env)
 
 The `stacks/` directory contains install scripts and Docker Compose files for optional services. Install scripts are automatically copied to `~/` on the device during the build, ready to run after first boot.
 
+### OctoPrint (3D printer interface)
+
+Native OctoPrint core for a Creality Ender-3 V3 SE (or similar USB-serial printer). No Docker, no webcam, no bundled plugins — designed for the ~384 MB RAM constraint. See **[docs/octoprint.md](docs/octoprint.md)** for the full guide including USB OTG host mode, WiFi prerequisites, serial device detection, memory tradeoffs, and troubleshooting.
+
+```bash
+sudo ~/install-octoprint.sh
+```
+
+- Web UI: `http://<device-ip>:5000`
+- Service: `rc-service octoprint start|stop|restart|status`
+- Logs: `/var/log/octoprint/octoprint.log`
+- Data: `/var/lib/octoprint`
+- DTB: use `msm8916-yiming-uz801v3-octoprint.dtb` to reclaim ~91 MB from unused LTE + video decode
+
 ### Zoraxy (Reverse Proxy)
 
 Zoraxy provides a reverse proxy with HTTPS termination and a web admin panel. It can be installed as a native service or as a Docker container.

@@ -86,6 +86,47 @@ ls /dev/tty{USB,ACM}* 2>/dev/null
 The `octoprint` service user is added to the `dialout` group by `install-octoprint.sh` so it can
 open serial ports without root.
 
+## Kernel drivers for USB serial
+
+> **The `linux-postmarketos-qcom-msm8916` kernel (6.12.1-msm8916) does not ship
+> `cdc_acm` or `ch341` as precompiled modules. There is no `apk add` that installs
+> them.** Confirmed via `apk search ch341`, `apk search cdc-acm`, and the running
+> kernel config (`CONFIG_USB_ACM=not set`, `CONFIG_USB_SERIAL_CH341=not set`).
+
+What *is* already present on the device:
+- `usbserial.ko` — generic USB serial core (dependency for all USB serial drivers)
+- `cp210x.ko` — SiLabs CP2102/CP2104 adapters already work
+
+### Decision: out-of-tree module build, exact kernel version
+
+We build only the missing `.ko` files against the exact kernel source for
+`6.12.1-msm8916`. This approach:
+
+- Keeps `uname -r` unchanged on the device (no full kernel rebuild or reflash).
+- Avoids touching the bootloader or extlinux chain.
+- Produces two small `.ko` files that are `insmod`/`modprobe`-able and can be
+  added to the image under `/lib/modules/6.12.1-msm8916/kernel/drivers/usb/`.
+
+A full kernel rebuild is **not chosen** because it would require reflashing,
+risks boot regressions, and is unnecessary when `usbserial.ko` (the dependency)
+is already loaded.
+
+### Minimal driver list
+
+| CONFIG symbol | Module file | `/dev` node | Needed for |
+|---|---|---|---|
+| `USB_ACM` | `cdc-acm.ko` | `/dev/ttyACM0` | STM32-based boards (e.g. newer Creality, BLTouch) |
+| `USB_SERIAL_CH341` | `ch341.ko` | `/dev/ttyUSB0` | Creality boards with CH340/CH341 chip |
+| `USB_SERIAL_FTDI_SIO` | `ftdi_sio.ko` | `/dev/ttyUSB0` | FTDI-based adapters (optional) |
+| `USB_SERIAL_PL2303` | `pl2303.ko` | `/dev/ttyUSB0` | Prolific PL2303 adapters (optional) |
+
+`cp210x.ko` is already present and covers SiLabs CP210x — no action needed.
+
+Build order for issues 002–005: set up cross-compile environment → clone
+postmarketos kernel source at tag `6.12.1-msm8916` → enable the four symbols
+above in `.config` → build only `M=drivers/usb/serial drivers/usb/class` →
+copy resulting `.ko` files into the image.
+
 ## DTB profile selection
 
 Set `DTB_FILE` in `variables.env` before building, or update `extlinux.conf` on the device after
@@ -197,7 +238,7 @@ deluser octoprint
 
 | Symptom | Check |
 |---|---|
-| No `/dev/ttyUSB0` or `/dev/ttyACM0` | `dmesg | tail -20` — cable, OTG mode, printer power |
+| No `/dev/ttyUSB0` or `/dev/ttyACM0` | `dmesg | tail -20` — cable, OTG mode, printer power. If dmesg shows `unknown USB device` with no driver, the kernel module is missing (see **Kernel drivers for USB serial** above) |
 | USB gadget lost after OTG switch | Expected — connect via WiFi instead |
 | OctoPrint unreachable on port 5000 | `rc-service octoprint status`, check logs |
 | OOM / service killed | `free -m`, `dmesg | grep -i oom` — disable heavy plugins, confirm OctoPrint DTB profile |

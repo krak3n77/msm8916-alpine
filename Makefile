@@ -58,3 +58,10 @@ zoraxy: _check-env
 
 verify-octoprint:
 	./stacks/verify-octoprint.sh
+
+# Kernel build environment for out-of-tree modules (issue-002)
+kernel-env-check:
+	bash scripts/validate-kernel-env.sh
+
+kernel-env: _check-env
+	bash scripts/setup-kernel-build.sh

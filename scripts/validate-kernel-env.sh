@@ -1,7 +1,7 @@
 #!/bin/bash
 # Fast validation of the kernel build environment.
-# Does NOT download or compile anything — safe to run on the host.
-# Exit 0 = all checks pass; Exit 1 = one or more failures.
+# Fetches the pmaports APKBUILD (v25.06) to verify pkgver/tag, checks URL reachability.
+# Does NOT compile anything. Exit 0 = all checks pass; Exit 1 = one or more failures.
 
 set -euo pipefail
 
@@ -32,15 +32,39 @@ else
         || fail "aarch64-linux-gnu-gcc not found (apt install gcc-aarch64-linux-gnu)"
 fi
 
+# --- APKBUILD fetch + version/tag verification ---
+info "Fetching pmaports v25.06 APKBUILD to verify pkgver and _tag ..."
+APKBUILD_URL='https://gitlab.postmarketos.org/postmarketOS/pmaports/-/raw/v25.06/device/community/linux-postmarketos-qcom-msm8916/APKBUILD'
+APKBUILD_TMP="$(mktemp /tmp/validate-apkbuild.XXXXXX)"
+if wget -q -O "$APKBUILD_TMP" "$APKBUILD_URL" 2>/dev/null; then
+    ok "APKBUILD URL reachable (pmaports v25.06)"
+    _pkgver="$(grep '^pkgver=' "$APKBUILD_TMP" | cut -d= -f2 | tr -d '[:space:]')"
+    if [ "$_pkgver" = "6.12.1" ]; then
+        ok "APKBUILD pkgver=${_pkgver}"
+    else
+        fail "APKBUILD pkgver=${_pkgver} (expected 6.12.1)"
+    fi
+    # Verify source line references the expected tag
+    _expected_tag="v${_pkgver}-msm8916"
+    if grep -q "${_expected_tag}" "$APKBUILD_TMP"; then
+        ok "APKBUILD source references tag ${_expected_tag}"
+    else
+        fail "APKBUILD source does not reference expected tag ${_expected_tag}"
+    fi
+else
+    fail "APKBUILD URL not reachable: $APKBUILD_URL"
+fi
+rm -f "$APKBUILD_TMP"
+
 # --- URL reachability ---
 info "Checking upstream URLs (requires network) ..."
 wget -q --spider 'https://github.com/msm8916-mainline/linux/archive/v6.12.1-msm8916.tar.gz' 2>/dev/null \
     && ok "kernel source URL reachable (v6.12.1-msm8916)" \
     || fail "kernel source URL not reachable"
 
-wget -q --spider 'https://gitlab.com/postmarketOS/pmaports/-/raw/master/device/community/linux-postmarketos-qcom-msm8916/config-postmarketos-qcom-msm8916.aarch64' 2>/dev/null \
-    && ok "pmaports config URL reachable" \
-    || fail "pmaports config URL not reachable"
+wget -q --spider 'https://gitlab.postmarketos.org/postmarketOS/pmaports/-/raw/v25.06/device/community/linux-postmarketos-qcom-msm8916/config-postmarketos-qcom-msm8916.aarch64' 2>/dev/null \
+    && ok "pmaports config URL reachable (v25.06)" \
+    || fail "pmaports config URL not reachable (v25.06)"
 
 # --- Optional: check if setup was already run ---
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"

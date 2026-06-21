@@ -1,5 +1,6 @@
 #!/bin/bash
-# Setup kernel source tree for out-of-tree module builds against 6.12.1-msm8916.
+# Setup kernel source tree for out-of-tree module builds against msm8916 pmaports kernel.
+# Pins pmaports v25.06; derives kernel version/tag from the official APKBUILD.
 # Run inside the builder VM (make builder) or any arm64/amd64 Linux box with
 # the required cross-build deps installed (see install_dependencies.sh).
 #
@@ -9,13 +10,29 @@
 
 set -euo pipefail
 
-KVER="6.12.1"
-KTAG="v${KVER}-msm8916"
-KSRC_DIR="linux-${KTAG#v}"
 FLAVOR="postmarketos-qcom-msm8916"
+PMAPORTS_REF="v25.06"
+PMAPORTS_BASE="https://gitlab.postmarketos.org/postmarketOS/pmaports/-/raw/${PMAPORTS_REF}/device/community/linux-${FLAVOR}"
+APKBUILD_URL="${PMAPORTS_BASE}/APKBUILD"
+CONFIG_URL="${PMAPORTS_BASE}/config-${FLAVOR}.aarch64"
 BUILD_DIR="$(cd "$(dirname "$0")/.." && pwd)/kernel-build"
+
+mkdir -p "$BUILD_DIR"
+
+# --- 0. Fetch APKBUILD and derive version/tag (single source of truth) ---
+echo "[+] Fetching APKBUILD from pmaports ${PMAPORTS_REF} ..."
+wget -q -O "$BUILD_DIR/APKBUILD" "$APKBUILD_URL"
+# ponytail: parse with grep/sed; APKBUILD is shell so sourcing it is risky
+KVER="$(grep '^pkgver=' "$BUILD_DIR/APKBUILD" | cut -d= -f2 | tr -d '[:space:]')"
+if [ "$KVER" != "6.12.1" ]; then
+    echo "[FAIL] pmaports ${PMAPORTS_REF} APKBUILD reports pkgver=${KVER}, expected 6.12.1" >&2
+    exit 1
+fi
+# _tag is defined as v${pkgver}-msm8916 in APKBUILD
+KTAG="v${KVER}-msm8916"
+KSRC_DIR="linux-${KVER}-msm8916"
 KERNEL_URL="https://github.com/msm8916-mainline/linux/archive/${KTAG}.tar.gz"
-CONFIG_URL="https://gitlab.com/postmarketOS/pmaports/-/raw/master/device/community/linux-${FLAVOR}/config-${FLAVOR}.aarch64"
+echo "[+] APKBUILD pkgver=${KVER}  _tag=${KTAG}"
 
 # Detect cross-compile prefix
 if [ "$(uname -m)" = "aarch64" ]; then
@@ -26,9 +43,9 @@ fi
 
 echo "[msm8916-kern] BUILD_DIR : $BUILD_DIR"
 echo "[msm8916-kern] kernel tag: $KTAG"
+echo "[msm8916-kern] pmaports  : ${PMAPORTS_REF}"
 echo "[msm8916-kern] CROSS     : ${CROSS_COMPILE:-<native arm64>}"
 
-mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
 
 # --- 1. Kernel source ---

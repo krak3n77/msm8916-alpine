@@ -97,6 +97,20 @@ else
     fail "OctoPrint DTB profile not found: dts/msm8916-yiming-uz801v3-octoprint.dts"
 fi
 
+# ---- 5. USB serial module artifacts (issue-005) --------------
+echo ""
+echo "-- 5. USB serial module artifacts --"
+_KERNEL_VER="6.12.1-msm8916"
+_ARTIFACT_DIR="$REPO/kernel-build/artifacts/${_KERNEL_VER}/modules"
+for _mod in ch341.ko usbserial.ko cdc-acm.ko; do
+    if [ -f "$_ARTIFACT_DIR/$_mod" ]; then
+        ok "USB module artifact present: ${_mod}"
+    else
+        fail "USB module artifact missing: ${_mod}  (run: make kernel-env && make kernel-modules)"
+    fi
+done
+unset _KERNEL_VER _ARTIFACT_DIR _mod
+
 # ---- Summary --------------------------------------------------
 echo ""
 echo "=== Automated: $PASS passed, $FAIL failed ==="

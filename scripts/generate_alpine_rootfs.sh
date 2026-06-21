@@ -319,6 +319,36 @@ chmod +x "$CHROOT/etc/local.d/zram.start"
 
 # Optional OctoPrint appliance preinstall
 if [ "$OCTOPRINT_PREINSTALL" = "yes" ]; then
+    # --- USB serial modules (issue-005) ---
+    KERNEL_VER="6.12.1-msm8916"
+    USB_MOD_SRC="$(pwd)/kernel-build/artifacts/${KERNEL_VER}/modules"
+    USB_REQUIRED_MODS="ch341.ko usbserial.ko cdc-acm.ko"
+
+    # Fail clearly if required modules are missing
+    _missing=""
+    for _mod in $USB_REQUIRED_MODS; do
+        [ -f "$USB_MOD_SRC/$_mod" ] || _missing="$_missing $_mod"
+    done
+    if [ -n "$_missing" ]; then
+        echo "ERROR: Missing required USB serial modules for OctoPrint:${_missing}"
+        echo "       Build them first:  make kernel-env && make kernel-modules"
+        echo "       Expected in:       $USB_MOD_SRC/"
+        exit 1
+    fi
+
+    # Copy modules into rootfs under correct kernel/drivers subdirs
+    echo "[*] Installing USB serial modules (${KERNEL_VER})..."
+    USB_MOD_SERIAL="$CHROOT/lib/modules/${KERNEL_VER}/kernel/drivers/usb/serial"
+    USB_MOD_CLASS="$CHROOT/lib/modules/${KERNEL_VER}/kernel/drivers/usb/class"
+    mkdir -p "$USB_MOD_SERIAL" "$USB_MOD_CLASS"
+    for _mod in usbserial.ko ch341.ko ftdi_sio.ko pl2303.ko; do
+        [ -f "$USB_MOD_SRC/$_mod" ] && install -m0644 "$USB_MOD_SRC/$_mod" "$USB_MOD_SERIAL/"
+    done
+    [ -f "$USB_MOD_SRC/cdc-acm.ko" ] && install -m0644 "$USB_MOD_SRC/cdc-acm.ko" "$USB_MOD_CLASS/"
+
+    # Build module index so modprobe ch341 works on first boot
+    chroot "$CHROOT" depmod -a "${KERNEL_VER}"
+
     echo "[*] Preinstalling OctoPrint..."
     install -Dm0755 stacks/install-octoprint.sh "$CHROOT/tmp/install-octoprint.sh"
     chroot "$CHROOT" bash /tmp/install-octoprint.sh -y

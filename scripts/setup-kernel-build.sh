@@ -15,7 +15,8 @@ PMAPORTS_REF="v25.06"
 PMAPORTS_BASE="https://gitlab.postmarketos.org/postmarketOS/pmaports/-/raw/${PMAPORTS_REF}/device/community/linux-${FLAVOR}"
 APKBUILD_URL="${PMAPORTS_BASE}/APKBUILD"
 CONFIG_URL="${PMAPORTS_BASE}/config-${FLAVOR}.aarch64"
-BUILD_DIR="$(cd "$(dirname "$0")/.." && pwd)/kernel-build"
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+BUILD_DIR="$REPO_ROOT/kernel-build"
 
 mkdir -p "$BUILD_DIR"
 
@@ -72,9 +73,20 @@ else
     echo "     and re-run for an exact match with the running kernel)"
 fi
 
+# --- 2b. Apply local config fragment (USB serial printer drivers, issue-003) ---
+FRAGMENT="$REPO_ROOT/kernel/usb-serial-printer.config"
+if [ -f "$FRAGMENT" ]; then
+    echo "[+] Applying config fragment: kernel/usb-serial-printer.config"
+    # ponytail: append wins over earlier 'not set' lines; olddefconfig finalises deps
+    cat "$FRAGMENT" >> "$KSRC_DIR/.config"
+else
+    echo "[WARN] Config fragment not found, skipping: $FRAGMENT"
+fi
+
 # --- 3. modules_prepare (no full kernel compile) ---
 cd "$KSRC_DIR"
 echo "[+] Running make olddefconfig + modules_prepare ..."
+
 make ARCH=arm64 CROSS_COMPILE="$CROSS_COMPILE" olddefconfig
 # ponytail: modules_prepare builds only what out-of-tree modules need (scripts, headers, Module.symvers)
 make ARCH=arm64 CROSS_COMPILE="$CROSS_COMPILE" modules_prepare

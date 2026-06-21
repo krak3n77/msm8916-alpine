@@ -66,11 +66,29 @@ wget -q --spider 'https://gitlab.postmarketos.org/postmarketOS/pmaports/-/raw/v2
     && ok "pmaports config URL reachable (v25.06)" \
     || fail "pmaports config URL not reachable (v25.06)"
 
-# --- Optional: check if setup was already run ---
+# --- Config fragment: USB serial printer drivers (issue-003) ---
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+FRAGMENT="$REPO_ROOT/kernel/usb-serial-printer.config"
+USB_SERIAL_SYMBOLS="CONFIG_USB_SERIAL CONFIG_USB_SERIAL_CH341 CONFIG_USB_ACM CONFIG_USB_SERIAL_FTDI_SIO CONFIG_USB_SERIAL_PL2303"
+if [ -f "$FRAGMENT" ]; then
+    ok "config fragment exists (kernel/usb-serial-printer.config)"
+    for sym in $USB_SERIAL_SYMBOLS; do
+        grep -q "^${sym}=" "$FRAGMENT" && ok "fragment: ${sym}" || fail "fragment missing: ${sym}"
+    done
+else
+    fail "config fragment missing: kernel/usb-serial-printer.config"
+fi
+
+# --- Optional: check if setup was already run ---
 KSRC="$REPO_ROOT/kernel-build/linux-6.12.1-msm8916"
 if [ -f "$KSRC/scripts/mod/modpost" ]; then
     ok "modules_prepare already done ($KSRC)"
+    # Verify USB serial symbols landed in the prepared .config
+    if [ -f "$KSRC/.config" ]; then
+        for sym in $USB_SERIAL_SYMBOLS; do
+            grep -q "^${sym}=m" "$KSRC/.config" && ok ".config: ${sym}=m" || fail ".config: ${sym} not =m (re-run setup-kernel-build.sh)"
+        done
+    fi
 else
     info "kernel-build not set up yet — run: sudo bash scripts/setup-kernel-build.sh"
 fi

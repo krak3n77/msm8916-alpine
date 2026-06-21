@@ -79,6 +79,13 @@ else
     fail "config fragment missing: kernel/usb-serial-printer.config"
 fi
 
+# --- Build script for USB modules (issue-004) ---
+if [ -f "$REPO_ROOT/scripts/build-usb-modules.sh" ]; then
+    ok "build-usb-modules.sh present"
+else
+    fail "scripts/build-usb-modules.sh missing"
+fi
+
 # --- Optional: check if setup was already run ---
 KSRC="$REPO_ROOT/kernel-build/linux-6.12.1-msm8916"
 if [ -f "$KSRC/scripts/mod/modpost" ]; then
@@ -91,6 +98,14 @@ if [ -f "$KSRC/scripts/mod/modpost" ]; then
     fi
 else
     info "kernel-build not set up yet — run: sudo bash scripts/setup-kernel-build.sh"
+fi
+
+# --- Optional: check if modules were already built ---
+ARTIFACT_DIR="$REPO_ROOT/kernel-build/artifacts/6.12.1-msm8916/modules"
+if [ -d "$ARTIFACT_DIR" ] && ls "$ARTIFACT_DIR"/*.ko 2>/dev/null | grep -q .; then
+    ok "USB modules already built ($(ls "$ARTIFACT_DIR"/*.ko | wc -l | tr -d ' ') .ko files in artifacts/)"
+else
+    info "USB modules not built yet — run: sudo bash scripts/build-usb-modules.sh"
 fi
 
 echo ""

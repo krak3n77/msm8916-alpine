@@ -65,3 +65,8 @@ kernel-env-check:
 
 kernel-env: _check-env
 	bash scripts/setup-kernel-build.sh
+
+# Compile USB serial modules + verify vermagic (issue-004)
+# Requires: make kernel-env first
+kernel-modules: _check-env
+	bash scripts/build-usb-modules.sh

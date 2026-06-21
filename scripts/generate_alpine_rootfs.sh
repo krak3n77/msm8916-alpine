@@ -31,6 +31,7 @@ PMOS_MIRROR="${PMOS_MIRROR:-http://mirror.postmarketos.org/postmarketos}"
 USERNAME="${USERNAME:-user}"
 DTB_FILE="${DTB_FILE:-msm8916-yiming-uz801v3.dtb}"
 USB0_IP="${USB0_IP:-192.168.42.1/24}"
+USB_GADGET_INSTALL="${USB_GADGET_INSTALL:-yes}"
 USB_GADGET_OTG="${USB_GADGET_OTG:-no}"
 USB_GADGET_ENABLED="${USB_GADGET_ENABLED:-yes}"
 OCTOPRINT_PREINSTALL="${OCTOPRINT_PREINSTALL:-no}"
@@ -281,18 +282,20 @@ cat > "$CHROOT/etc/fstab" <<EOF
 EOF
 
 # USB gadget
-install -Dm0755 configs/usb-gadget/usb-gadget.sh "$CHROOT/usr/sbin/usb-gadget"
-install -Dm0755 configs/usb-gadget/usb-gadget.init "$CHROOT/etc/init.d/usb-gadget"
-cat > "$CHROOT/etc/usb-gadget.conf" << EOF
+if [ "$USB_GADGET_INSTALL" = "yes" ]; then
+    install -Dm0755 configs/usb-gadget/usb-gadget.sh "$CHROOT/usr/sbin/usb-gadget"
+    install -Dm0755 configs/usb-gadget/usb-gadget.init "$CHROOT/etc/init.d/usb-gadget"
+    cat > "$CHROOT/etc/usb-gadget.conf" << EOF
 # MSM8916 USB Gadget Configuration
 
 USE_NCM=1           # 1 = NCM (Linux/Mac), 0 = RNDIS (Windows)
 ENABLE_OTG=$([ "$USB_GADGET_OTG" = "yes" ] && echo 1 || echo 0)        # 1 = OTG Host mode, 0 = Gadget mode
 EOF
 
-# Enable USB gadget service (controlled by USB_GADGET_ENABLED profile setting)
-if [ "$USB_GADGET_ENABLED" = "yes" ]; then
-    chroot "$CHROOT" ash -l -c "rc-update add usb-gadget default" || true
+    # Enable USB gadget service (controlled by USB_GADGET_ENABLED profile setting)
+    if [ "$USB_GADGET_ENABLED" = "yes" ]; then
+        chroot "$CHROOT" ash -l -c "rc-update add usb-gadget default" || true
+    fi
 fi
 
 # Expand rootfs on first boot

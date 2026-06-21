@@ -38,9 +38,25 @@ else
 fi
 rm -f "$TMPINIT"
 
-# ---- 2. Idempotency guard ------------------------------------
+# ---- 2. USB gadget policy ------------------------------------
 echo ""
-echo "-- 2. Idempotency guard --"
+echo "-- 2. USB gadget policy --"
+
+if grep -q 'USB_GADGET_INSTALL="no"' "$REPO/profiles/octoprint.env"; then
+    ok "OctoPrint profile does not install usb-gadget tooling"
+else
+    fail "OctoPrint profile should set USB_GADGET_INSTALL=\"no\""
+fi
+
+if grep -q 'if \[ "$USB_GADGET_INSTALL" = "yes" \]' "$REPO/scripts/generate_alpine_rootfs.sh"; then
+    ok "Rootfs generator gates usb-gadget install on USB_GADGET_INSTALL"
+else
+    fail "Rootfs generator installs usb-gadget unconditionally"
+fi
+
+# ---- 3. Idempotency guard ------------------------------------
+echo ""
+echo "-- 3. Idempotency guard --"
 
 if grep -q 'already up to date, nothing to do' "$REPO/stacks/install-octoprint.sh"; then
     ok "Installer skips reinstall when installed version matches latest"
@@ -54,9 +70,9 @@ else
     fail "Installer does not preserve DATA_DIR on rerun"
 fi
 
-# ---- 3. OctoPrint no-LTE DTB profile -------------------------
+# ---- 4. OctoPrint no-LTE DTB profile -------------------------
 echo ""
-echo "-- 3. OctoPrint no-LTE DTB profile --"
+echo "-- 4. OctoPrint no-LTE DTB profile --"
 DTS="$REPO/dts/msm8916-yiming-uz801v3-octoprint.dts"
 
 if [ -f "$DTS" ]; then

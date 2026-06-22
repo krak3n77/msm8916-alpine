@@ -102,6 +102,13 @@ else
     fail "Appliance install is missing bundled Network Settings plugin zip integration"
 fi
 
+if grep -q 'RESOURCE_MONITOR_ZIP=' "$REPO/stacks/install-octoprint.sh" \
+   && grep -q 'OctoPrint-Resource-Monitor.*zip' "$REPO/scripts/generate_alpine_rootfs.sh"; then
+    ok "Appliance downloads Resource Monitor zip before chroot install"
+else
+    fail "Appliance install is missing bundled Resource Monitor zip integration"
+fi
+
 if grep -q 'WRAPPER_SRC=/tmp/nm-wrapper' "$REPO/scripts/generate_alpine_rootfs.sh" \
    && grep -q 'NOPASSWD: \$WRAPPER_DST status, \$WRAPPER_DST read' "$REPO/stacks/install-nm-wrapper.sh"; then
     ok "Appliance install bundles nm-wrapper and grants OctoPrint wrapper-only sudo"

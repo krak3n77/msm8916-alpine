@@ -14,6 +14,8 @@ if [ -z "$NETWORK_PLUGIN_ZIP" ]; then
     done
 fi
 NETWORK_PLUGIN_NAME="OctoPrint-NetworkSettings"
+RESOURCE_MONITOR_VERSION="0.4.0"
+RESOURCE_MONITOR_ZIP="${RESOURCE_MONITOR_ZIP:-}"
 YES=0
 
 while [ $# -gt 0 ]; do
@@ -81,18 +83,19 @@ if [ "$NEEDS_INSTALL" -eq 1 ]; then
     echo "$LATEST" > "$VERSION_FILE"
 fi
 
-# Install Resource Monitor plugin (pinned release)
-RM_VERSION="0.4.0"
-RM_URL="https://github.com/Renaud11232/OctoPrint-Resource-Monitor/archive/refs/tags/${RM_VERSION}.zip"
+# Install Resource Monitor plugin (pinned release zip prepared by the image build)
 RM_INSTALLED=$("$VENV_DIR/bin/pip" show OctoPrint-Resource-Monitor 2>/dev/null | awk '/^Version:/{print $2}')
 # ponytail: idempotent - skip if exact pinned version already present
-if [ "$RM_INSTALLED" = "$RM_VERSION" ]; then
-    log "[+] Resource Monitor $RM_VERSION already installed — skipping."
+if [ "$RM_INSTALLED" = "$RESOURCE_MONITOR_VERSION" ]; then
+    log "[+] Resource Monitor $RESOURCE_MONITOR_VERSION already installed — skipping."
+elif [ -n "$RESOURCE_MONITOR_ZIP" ] && [ -f "$RESOURCE_MONITOR_ZIP" ]; then
+    log "[*] Installing Resource Monitor plugin $RESOURCE_MONITOR_VERSION from $RESOURCE_MONITOR_ZIP..."
+    run_quiet "$VENV_DIR/bin/pip" install "$RESOURCE_MONITOR_ZIP" \
+        || { echo "ERROR: Failed to install Resource Monitor $RESOURCE_MONITOR_VERSION."; exit 1; }
+    log "[+] Resource Monitor $RESOURCE_MONITOR_VERSION installed."
 else
-    log "[*] Installing Resource Monitor plugin $RM_VERSION..."
-    run_quiet "$VENV_DIR/bin/pip" install --quiet "$RM_URL" \
-        || { echo "ERROR: Failed to install Resource Monitor $RM_VERSION."; exit 1; }
-    log "[+] Resource Monitor $RM_VERSION installed."
+    echo "ERROR: Resource Monitor zip not bundled: ${RESOURCE_MONITOR_ZIP:-unset}"
+    exit 1
 fi
 
 NETWORK_PLUGIN_VERSION=""
@@ -103,7 +106,7 @@ if [ -n "$NETWORK_PLUGIN_ZIP" ] && [ -f "$NETWORK_PLUGIN_ZIP" ]; then
         log "[+] Network Settings plugin $NETWORK_PLUGIN_VERSION already installed — skipping."
     else
         log "[*] Installing Network Settings plugin from $NETWORK_PLUGIN_ZIP..."
-        run_quiet "$VENV_DIR/bin/pip" install --quiet "$NETWORK_PLUGIN_ZIP" \
+        run_quiet "$VENV_DIR/bin/pip" install "$NETWORK_PLUGIN_ZIP" \
             || { echo "ERROR: Failed to install Network Settings plugin."; exit 1; }
         log "[+] Network Settings plugin installed."
     fi

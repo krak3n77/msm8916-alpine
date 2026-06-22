@@ -49,27 +49,29 @@ log "[*] Latest version: $LATEST"
 CURRENT=""
 [ -f "$VERSION_FILE" ] && CURRENT=$(cat "$VERSION_FILE")
 
-if [ "$CURRENT" = "$LATEST" ] && [ -x "$VENV_DIR/bin/octoprint" ] && [ -f "/etc/init.d/octoprint" ]; then
-    log "[+] OctoPrint $LATEST is already up to date, nothing to do."
-    exit 0
+# ponytail: only skip pip; always refresh service/sudoers/config below
+NEEDS_INSTALL=1
+if [ "$CURRENT" = "$LATEST" ] && [ -x "$VENV_DIR/bin/octoprint" ]; then
+    log "[+] OctoPrint $LATEST already installed — skipping pip reinstall."
+    NEEDS_INSTALL=0
 fi
-
-[ -n "$CURRENT" ] && log "[*] Updating $CURRENT -> $LATEST..." || log "[*] Installing OctoPrint $LATEST..."
 
 # Create install dir; preserve DATA_DIR if it already exists (user config/uploads)
 mkdir -p "$INSTALL_DIR"
-if [ ! -d "$DATA_DIR" ]; then
-    mkdir -p "$DATA_DIR"
+mkdir -p "$DATA_DIR"
+
+if [ "$NEEDS_INSTALL" -eq 1 ]; then
+    [ -n "$CURRENT" ] && log "[*] Updating $CURRENT -> $LATEST..." || log "[*] Installing OctoPrint $LATEST..."
+
+    log "[*] Setting up Python virtual environment..."
+    run_quiet python3 -m venv --system-site-packages "$VENV_DIR"
+
+    log "[*] Installing OctoPrint into venv (may take several minutes on this device)..."
+    run_quiet "$VENV_DIR/bin/pip" install --quiet --upgrade pip
+    run_quiet "$VENV_DIR/bin/pip" install --quiet "OctoPrint==$LATEST"
+
+    echo "$LATEST" > "$VERSION_FILE"
 fi
-
-log "[*] Setting up Python virtual environment..."
-run_quiet python3 -m venv --system-site-packages "$VENV_DIR"
-
-log "[*] Installing OctoPrint into venv (may take several minutes on this device)..."
-run_quiet "$VENV_DIR/bin/pip" install --quiet --upgrade pip
-run_quiet "$VENV_DIR/bin/pip" install --quiet "OctoPrint==$LATEST"
-
-echo "$LATEST" > "$VERSION_FILE"
 
 if [ ! -f "$DATA_DIR/config.yaml" ]; then
     log "[*] Installing default OctoPrint config..."

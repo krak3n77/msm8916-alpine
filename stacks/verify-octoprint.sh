@@ -94,6 +94,13 @@ else
     fail "Installer does not guard config.yaml write — may overwrite user config on rerun"
 fi
 
+if grep -q 'RESOURCE_MONITOR_ZIP=' "$REPO/stacks/install-octoprint.sh" \
+   && grep -q 'OctoPrint-Resource-Monitor.*zip' "$REPO/scripts/generate_alpine_rootfs.sh"; then
+    ok "Appliance downloads Resource Monitor zip before chroot install"
+else
+    fail "Appliance install is missing bundled Resource Monitor zip integration"
+fi
+
 # ---- 4. OctoPrint no-LTE DTB profile -------------------------
 echo ""
 echo "-- 4. OctoPrint no-LTE DTB profile --"

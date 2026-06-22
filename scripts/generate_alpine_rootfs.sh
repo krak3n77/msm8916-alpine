@@ -225,8 +225,23 @@ chmod 0600 "$CHROOT/etc/NetworkManager/system-connections/"* 2>/dev/null || true
 # Substitute WiFi placeholders if WiFi is enabled and credentials are provided
 if [ "${WIFI_ENABLED:-yes}" = "yes" ] && [ -n "${WIFI_SSID:-}" ]; then
     echo "[*] Configuring WiFi connection (SSID: ${WIFI_SSID})"
-    sed -i "s/__SSID__/${WIFI_SSID}/g" "$CHROOT/etc/NetworkManager/system-connections/wlan.nmconnection"
-    sed -i "s/__PASS__/${WIFI_PASS:-}/g" "$CHROOT/etc/NetworkManager/system-connections/wlan.nmconnection"
+    WLAN_CONN="$CHROOT/etc/NetworkManager/system-connections/wlan.nmconnection"
+    sed -i "s/__SSID__/${WIFI_SSID}/g" "$WLAN_CONN"
+    sed -i "s/__PASS__/${WIFI_PASS:-}/g" "$WLAN_CONN"
+    if [ -n "${WIFI_IP:-}" ]; then
+        echo "[*] WiFi: static ${WIFI_IP}"
+        sed -i '/^\[ipv4\]/,/^\[ipv6\]/ s|method=auto|method=manual|' "$WLAN_CONN"
+        if [ -n "${WIFI_GW:-}" ]; then
+            sed -i "/\[ipv4\]/a address1=${WIFI_IP},${WIFI_GW}" "$WLAN_CONN"
+        else
+            sed -i "/\[ipv4\]/a address1=${WIFI_IP}" "$WLAN_CONN"
+        fi
+        if [ -n "${WIFI_DNS:-}" ]; then
+            _WIFI_DNS="$(printf '%s' "$WIFI_DNS" | tr ',' ';')"
+            case "$_WIFI_DNS" in *';') ;; *) _WIFI_DNS="${_WIFI_DNS};" ;; esac
+            sed -i "/\[ipv4\]/a dns=${_WIFI_DNS}" "$WLAN_CONN"
+        fi
+    fi
 else
     echo "[*] WiFi disabled or no SSID provided — removing wlan config"
     rm -f "$CHROOT/etc/NetworkManager/system-connections/wlan.nmconnection"
@@ -363,9 +378,16 @@ EOF
     chmod +x "$CHROOT/etc/local.d/octoprint-usb.start"
 
     echo "[*] Preinstalling OctoPrint..."
+    RESOURCE_MONITOR_VERSION="0.4.0"
+    RESOURCE_MONITOR_ZIP_HOST="$STAGING/OctoPrint-Resource-Monitor-${RESOURCE_MONITOR_VERSION}.zip"
+    wget -q "https://github.com/Renaud11232/OctoPrint-Resource-Monitor/archive/refs/tags/${RESOURCE_MONITOR_VERSION}.zip" -O "$RESOURCE_MONITOR_ZIP_HOST"
     install -Dm0755 stacks/install-octoprint.sh "$CHROOT/tmp/install-octoprint.sh"
-    chroot "$CHROOT" bash /tmp/install-octoprint.sh -y
-    rm -f "$CHROOT/tmp/install-octoprint.sh"
+    install -Dm0644 "$RESOURCE_MONITOR_ZIP_HOST" "$CHROOT/tmp/$(basename "$RESOURCE_MONITOR_ZIP_HOST")"
+    chroot "$CHROOT" env \
+        RESOURCE_MONITOR_ZIP="/tmp/$(basename "$RESOURCE_MONITOR_ZIP_HOST")" \
+        bash /tmp/install-octoprint.sh -y
+    chroot "$CHROOT" /opt/octoprint/venv/bin/pip show OctoPrint-Resource-Monitor >/dev/null
+    rm -rf "$CHROOT/tmp/install-octoprint.sh" "$CHROOT/tmp/$(basename "$RESOURCE_MONITOR_ZIP_HOST")"
 fi
 
 # Optional Zoraxy appliance preinstall

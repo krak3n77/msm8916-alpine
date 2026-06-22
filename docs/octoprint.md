@@ -11,7 +11,7 @@ dongle with constrained memory (~384 MB usable). Read this before installing.
 | OctoPi image | ✗ — this is Alpine Linux, not OctoPi |
 | Docker | ✗ — intentionally avoided; too heavy for ~384 MB RAM |
 | Webcam / live monitoring | Optional — install a lightweight plugin; no timelapse by default |
-| Pre-installed plugins | ✗ — OctoPrint core only |
+| Pre-installed plugins | Resource Monitor 0.4.0 |
 | LTE modem | ✗ — disabled in the OctoPrint DTB profile to reclaim ~86 MB RAM |
 
 OctoPrint runs as a native OpenRC service under a dedicated `octoprint` user, installed via
@@ -33,10 +33,8 @@ plugins (OctoPrint-Dashboard, timelapse, etc.) on this device.
 
 ## Interesting plugins
 
-Install these manually from OctoPrint's Plugin Manager; they are not preinstalled in the image.
-
-- **Resource Monitor** — useful on this low-RAM device. Install it from OctoPrint's plugin list and watch RAM, CPU, `/run`, and rootfs while printing.
-- **OctoPrint-RTSP** — for camera monitoring via RTSP:
+- **Resource Monitor** — preinstalled (v0.4.0). Watches RAM, CPU, disk, and network. On this box you only get ~384 MB usable RAM, so this is the fast way to catch memory pressure before OctoPrint or a plugin gets OOM-killed.
+- **OctoPrint-RTSP** — for camera monitoring via RTSP (install manually from OctoPrint's Plugin Manager):
   ```text
   https://github.com/soopahfly/OctoPrint-RTSP/archive/v1.0.3.zip
   ```
@@ -45,27 +43,16 @@ Keep camera use to live monitoring first. Avoid timelapse unless idle RAM/CPU du
 
 ## USB and WiFi — read this first
 
-The printer connects over **USB OTG host mode**. The same USB port is used for USB gadget
-networking (the NCM/RNDIS interface that gives you a wired SSH session). These two modes are
-mutually exclusive.
+The OctoPrint appliance uses its **single USB port** for the printer in **USB OTG host mode**.
+That port is **not** a USB networking fallback in this profile: `usb0` gadget mode is not part of
+the appliance, so remote access is expected to happen over **WiFi only**.
 
-> **Set up WiFi before switching to USB host mode.** Once the port is in OTG/host mode, USB
-> gadget networking is gone. If WiFi is not working you will lose all network access to the
-> dongle.
+> **Make sure WiFi works before depending on the box remotely.** If you save a bad wireless config,
+> there is no second USB-network path to fall back to and you can lock yourself out until you get
+> local access again.
 
-### Switching to USB host mode
-
-```bash
-# Confirm WiFi is up first
-ip addr show wlan0
-
-# Then switch USB port to OTG host mode
-usb-gadget enable_otg
-rc-service usb-gadget restart
-```
-
-Plug in the printer with a USB-A to USB-C/B cable (or USB OTG adapter). The printer should
-enumerate within a few seconds.
+The OctoPrint profile boots in OTG host mode already. Plug in the printer with a USB-A to USB-C/B
+cable (or USB OTG adapter). The printer should enumerate within a few seconds.
 
 ## Expected serial devices
 
@@ -169,7 +156,8 @@ The script is idempotent — safe to rerun if interrupted. It:
 1. Installs Alpine system dependencies (`python3`, build headers)
 2. Creates the `octoprint` service user
 3. Fetches the latest OctoPrint release from PyPI into `/opt/octoprint/venv`
-4. Installs the OpenRC service and enables it in the default runlevel
+4. Installs the Resource Monitor plugin (v0.4.0, pinned)
+5. Installs the OpenRC service and enables it in the default runlevel
 
 Install takes **10–20 minutes** on the dongle (slow single-core pip build).
 
@@ -181,9 +169,9 @@ OctoPrint binds to all interfaces on **port 5000**.
 # From your laptop — use the dongle's WiFi IP
 http://192.168.1.XXX:5000
 
-# Find the WiFi IP
-ssh user@192.168.42.1   # USB gadget (only works before OTG switch)
+# Find the WiFi IP on the appliance itself
 ip addr show wlan0
+nmcli device show wlan0
 ```
 
 First launch triggers the OctoPrint setup wizard in the browser.
@@ -234,12 +222,15 @@ rm -rf /opt/octoprint /var/lib/octoprint /var/log/octoprint /etc/init.d/octoprin
 deluser octoprint
 ```
 
+## Manual verification status
+
+Resource Monitor is preinstalled. Confirm it is listed in Plugin Manager and its tab renders on the appliance.
+
 ## Troubleshooting
 
 | Symptom | Check |
 |---|---|
 | No `/dev/ttyUSB0` or `/dev/ttyACM0` | `dmesg | tail -20` — cable, OTG mode, printer power. If dmesg shows `unknown USB device` with no driver, the kernel module is missing (see **Kernel drivers for USB serial** above) |
-| USB gadget lost after OTG switch | Expected — connect via WiFi instead |
 | OctoPrint unreachable on port 5000 | `rc-service octoprint status`, check logs |
 | OOM / service killed | `free -m`, `dmesg | grep -i oom` — disable heavy plugins, confirm OctoPrint DTB profile |
 | Modem still present | Wrong DTB loaded — check `extlinux.conf` FDT line |

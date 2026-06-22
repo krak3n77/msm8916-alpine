@@ -6,6 +6,9 @@ INSTALL_DIR="/opt/octoprint"
 VENV_DIR="$INSTALL_DIR/venv"
 DATA_DIR="/var/lib/octoprint"
 VERSION_FILE="$INSTALL_DIR/version"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+RESOURCE_MONITOR_VERSION="0.4.0"
+RESOURCE_MONITOR_ZIP="${RESOURCE_MONITOR_ZIP:-}"
 YES=0
 
 while [ $# -gt 0 ]; do
@@ -73,6 +76,21 @@ if [ "$NEEDS_INSTALL" -eq 1 ]; then
     echo "$LATEST" > "$VERSION_FILE"
 fi
 
+# Install Resource Monitor plugin (pinned release zip prepared by the image build)
+RM_INSTALLED=$("$VENV_DIR/bin/pip" show OctoPrint-Resource-Monitor 2>/dev/null | awk '/^Version:/{print $2}' || true)
+# ponytail: idempotent - skip if exact pinned version already present
+if [ "$RM_INSTALLED" = "$RESOURCE_MONITOR_VERSION" ]; then
+    log "[+] Resource Monitor $RESOURCE_MONITOR_VERSION already installed — skipping."
+elif [ -n "$RESOURCE_MONITOR_ZIP" ] && [ -f "$RESOURCE_MONITOR_ZIP" ]; then
+    log "[*] Installing Resource Monitor plugin $RESOURCE_MONITOR_VERSION from $RESOURCE_MONITOR_ZIP..."
+    run_quiet "$VENV_DIR/bin/pip" install "$RESOURCE_MONITOR_ZIP" \
+        || { echo "ERROR: Failed to install Resource Monitor $RESOURCE_MONITOR_VERSION."; exit 1; }
+    log "[+] Resource Monitor $RESOURCE_MONITOR_VERSION installed."
+else
+    echo "ERROR: Resource Monitor zip not bundled: ${RESOURCE_MONITOR_ZIP:-unset}"
+    exit 1
+fi
+
 if [ ! -f "$DATA_DIR/config.yaml" ]; then
     log "[*] Installing default OctoPrint config..."
     cat > "$DATA_DIR/config.yaml" <<'YAML'
@@ -81,10 +99,14 @@ server:
     serverRestartCommand: sudo /sbin/rc-service octoprint restart
     systemRestartCommand: sudo /sbin/reboot
     systemShutdownCommand: sudo /sbin/poweroff
-webcam:
-  stream:
-  snapshot:
-  ffmpeg:
+
+appearance:
+  components:
+    disabled:
+      tab:
+        - timelapse
+      settings:
+        - webcam
 YAML
 fi
 
@@ -136,8 +158,8 @@ run_quiet rc-update add octoprint default
 
 # ponytail: minimal sanity check - binary must be callable
 "$VENV_DIR/bin/octoprint" --version >/dev/null \
-    && log "[+] Installation verified." \
     || { echo "[!] WARNING: octoprint binary check failed."; exit 1; }
+log "[+] Installation verified."
 
 log "[+] Done! OctoPrint $LATEST installed."
 log "    Install : $INSTALL_DIR"

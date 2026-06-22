@@ -42,6 +42,9 @@ USERNAME="user"
 PASSWORD="changeme"          # Required — build fails if not set
 WIFI_SSID="MyNetwork"        # Optional — WiFi SSID to connect to
 WIFI_PASS="MyPassword"       # Optional — WiFi password
+WIFI_IP=""                   # Optional static WiFi IPv4 CIDR; empty = DHCP
+WIFI_GW=""                   # Optional gateway for WIFI_IP
+WIFI_DNS=""                  # Optional DNS for WIFI_IP
 DTB_FILE="msm8916-yiming-uz801v3.dtb"   # DTB to use in extlinux.conf
 USB0_IP="192.168.42.1/24"   # Static IP for USB gadget (with DHCP server)
                              # Set to "dhcp" when plugged into a router (OpenWrt, etc.)
@@ -74,6 +77,14 @@ zoraxy
 ### WiFi Configuration
 
 Set `WIFI_SSID` and `WIFI_PASS` in `variables.env`. The build will substitute them into the NetworkManager connection automatically.
+
+By default WiFi uses DHCP. To bake in a static WiFi address for any profile/stack, set:
+
+```bash
+WIFI_IP="192.168.1.50/24"
+WIFI_GW="192.168.1.1"
+WIFI_DNS="1.1.1.1;8.8.8.8;"
+```
 
 ### DTB Selection
 

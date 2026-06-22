@@ -11,7 +11,7 @@ dongle with constrained memory (~384 MB usable). Read this before installing.
 | OctoPi image | ✗ — this is Alpine Linux, not OctoPi |
 | Docker | ✗ — intentionally avoided; too heavy for ~384 MB RAM |
 | Webcam / live monitoring | Optional — install a lightweight plugin; no timelapse by default |
-| Pre-installed plugins | Resource Monitor 0.4.0, Network Settings |
+| Pre-installed plugins | Resource Monitor 0.4.0 |
 | LTE modem | ✗ — disabled in the OctoPrint DTB profile to reclaim ~86 MB RAM |
 
 OctoPrint runs as a native OpenRC service under a dedicated `octoprint` user, installed via
@@ -34,16 +34,6 @@ plugins (OctoPrint-Dashboard, timelapse, etc.) on this device.
 ## Interesting plugins
 
 - **Resource Monitor** — preinstalled (v0.4.0). Watches RAM, CPU, disk, and network. On this box you only get ~384 MB usable RAM, so this is the fast way to catch memory pressure before OctoPrint or a plugin gets OOM-killed.
-- **Network Settings** — preinstalled appliance WiFi editor for `wlan0` under **OctoPrint → Settings → Network Settings**.
-  - The top **WiFi Status** panel shows whether `wlan0` is connected plus the current SSID / IPv4 details.
-  - Edit **SSID** and **Password** in the **WiFi Credentials** section.
-  - **DHCP** means the access point/router assigns the IPv4 address automatically.
-  - **Static IPv4** means you must fill the address/CIDR yourself and usually also set gateway and DNS.
-  - **Save** writes the NetworkManager profile only. It stages the change on disk and keeps the current connection up.
-  - **Save & Restart Network** backs up the current WiFi config, saves the form, reloads NetworkManager config, then reconnects `wlan0` so the new settings take effect.
-  - **Revert to Last Backup** restores only the most recent saved backup, then reconnects `wlan0`.
-  - If you save a bad WiFi config and the box never reconnects, you may lose OctoPrint access before you can click **Revert**. Plan on local recovery in that case.
-  - **Neither action restarts OctoPrint.** Expect the web UI to disconnect briefly while WiFi reconnects.
 - **OctoPrint-RTSP** — for camera monitoring via RTSP (install manually from OctoPrint's Plugin Manager):
   ```text
   https://github.com/soopahfly/OctoPrint-RTSP/archive/v1.0.3.zip
@@ -234,23 +224,13 @@ deluser octoprint
 
 ## Manual verification status
 
-The Save & Restart Network / Revert flows have smoke coverage in the plugin repo, but **still need HITL verification on a real MSM8916 appliance**. Run this before calling the feature done:
-
-1. Open OctoPrint → Settings → Network Settings.
-2. Confirm the **WiFi Status** panel matches the current SSID / IPv4 state.
-3. Save a known-good WiFi config.
-4. Change SSID/password or IPv4 settings, use **Save**, and confirm the current connection stays up.
-5. Use **Save & Restart Network** and confirm `wlan0` reconnects with the new config.
-6. Use **Revert to Last Backup** and confirm the previous config comes back.
-7. Confirm OctoPrint itself was not restarted; only the browser session should drop/reconnect.
-8. Repeat once with an intentionally bad WiFi config so the recovery path is proven before field use.
+Resource Monitor is preinstalled. Confirm it is listed in Plugin Manager and its tab renders on the appliance.
 
 ## Troubleshooting
 
 | Symptom | Check |
 |---|---|
 | No `/dev/ttyUSB0` or `/dev/ttyACM0` | `dmesg | tail -20` — cable, OTG mode, printer power. If dmesg shows `unknown USB device` with no driver, the kernel module is missing (see **Kernel drivers for USB serial** above) |
-| Lost WiFi after a bad Network Settings change | Try **Revert to Last Backup** if you still have UI access. If the box never reconnects, you need local recovery because this profile has no USB-network fallback. |
 | OctoPrint unreachable on port 5000 | `rc-service octoprint status`, check logs |
 | OOM / service killed | `free -m`, `dmesg | grep -i oom` — disable heavy plugins, confirm OctoPrint DTB profile |
 | Modem still present | Wrong DTB loaded — check `extlinux.conf` FDT line |

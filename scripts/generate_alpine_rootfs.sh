@@ -366,21 +366,13 @@ EOF
     RESOURCE_MONITOR_VERSION="0.4.0"
     RESOURCE_MONITOR_ZIP_HOST="$STAGING/OctoPrint-Resource-Monitor-${RESOURCE_MONITOR_VERSION}.zip"
     wget -q "https://github.com/Renaud11232/OctoPrint-Resource-Monitor/archive/refs/tags/${RESOURCE_MONITOR_VERSION}.zip" -O "$RESOURCE_MONITOR_ZIP_HOST"
-    NETWORK_PLUGIN_ZIP_HOST="$(plugins/build-octoprint-network-settings.sh "$STAGING/plugin-dist")"
     install -Dm0755 stacks/install-octoprint.sh "$CHROOT/tmp/install-octoprint.sh"
-    install -Dm0755 stacks/install-nm-wrapper.sh "$CHROOT/tmp/install-nm-wrapper.sh"
     install -Dm0644 "$RESOURCE_MONITOR_ZIP_HOST" "$CHROOT/tmp/$(basename "$RESOURCE_MONITOR_ZIP_HOST")"
-    install -Dm0644 "$NETWORK_PLUGIN_ZIP_HOST" "$CHROOT/tmp/$(basename "$NETWORK_PLUGIN_ZIP_HOST")"
-    install -Dm0755 configs/nm-wrapper/nm-wrapper "$CHROOT/tmp/nm-wrapper"
     chroot "$CHROOT" env \
         RESOURCE_MONITOR_ZIP="/tmp/$(basename "$RESOURCE_MONITOR_ZIP_HOST")" \
-        NETWORK_PLUGIN_ZIP="/tmp/$(basename "$NETWORK_PLUGIN_ZIP_HOST")" \
         bash /tmp/install-octoprint.sh -y
-    chroot "$CHROOT" env WRAPPER_SRC=/tmp/nm-wrapper bash /tmp/install-nm-wrapper.sh
     chroot "$CHROOT" /opt/octoprint/venv/bin/pip show OctoPrint-Resource-Monitor >/dev/null
-    chroot "$CHROOT" /opt/octoprint/venv/bin/pip show OctoPrint-NetworkSettings >/dev/null
-    chroot "$CHROOT" test -x /usr/local/sbin/nm-wrapper
-    rm -rf "$CHROOT/tmp/install-octoprint.sh" "$CHROOT/tmp/install-nm-wrapper.sh" "$CHROOT/tmp/$(basename "$RESOURCE_MONITOR_ZIP_HOST")" "$CHROOT/tmp/$(basename "$NETWORK_PLUGIN_ZIP_HOST")" "$CHROOT/tmp/nm-wrapper"
+    rm -rf "$CHROOT/tmp/install-octoprint.sh" "$CHROOT/tmp/$(basename "$RESOURCE_MONITOR_ZIP_HOST")"
 fi
 
 # Optional Zoraxy appliance preinstall

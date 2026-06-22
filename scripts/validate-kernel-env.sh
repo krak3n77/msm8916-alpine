@@ -101,9 +101,9 @@ else
 fi
 
 # --- Optional: check if modules were already built ---
-ARTIFACT_DIR="$REPO_ROOT/kernel-build/artifacts/6.12.1-msm8916/modules"
+ARTIFACT_DIR="$REPO_ROOT/modules/octoprint-usb-serial/6.12.1-msm8916"
 if [ -d "$ARTIFACT_DIR" ] && ls "$ARTIFACT_DIR"/*.ko 2>/dev/null | grep -q .; then
-    ok "USB modules already built ($(ls "$ARTIFACT_DIR"/*.ko | wc -l | tr -d ' ') .ko files in artifacts/)"
+    ok "USB modules already built ($(ls "$ARTIFACT_DIR"/*.ko | wc -l | tr -d ' ') .ko files in modules/octoprint-usb-serial/)"
 else
     info "USB modules not built yet — run: sudo bash scripts/build-usb-modules.sh"
 fi

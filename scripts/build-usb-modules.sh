@@ -5,7 +5,7 @@
 #
 # Usage: sudo bash scripts/build-usb-modules.sh
 #
-# Outputs .ko files to: kernel-build/artifacts/6.12.1-msm8916/modules/
+# Outputs .ko files to: modules/octoprint-usb-serial/6.12.1-msm8916/
 # Then checks vermagic prefix matches "6.12.1-msm8916".
 #
 # Decision: if vermagic matches, copying .ko files + running depmod on the device
@@ -16,8 +16,8 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="$REPO_ROOT/kernel-build"
 KSRC="$BUILD_DIR/linux-6.12.1-msm8916"
-ARTIFACT_DIR="$BUILD_DIR/artifacts/6.12.1-msm8916/modules"
 EXPECTED_VERMAGIC="6.12.1-msm8916"
+ARTIFACT_DIR="$REPO_ROOT/modules/octoprint-usb-serial/$EXPECTED_VERMAGIC"
 
 # Detect cross-compile prefix (same logic as setup-kernel-build.sh)
 if [ "$(uname -m)" = "aarch64" ]; then

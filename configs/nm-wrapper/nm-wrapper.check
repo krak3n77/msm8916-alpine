@@ -143,6 +143,72 @@ STUB
     RC=0; OUT=$(PATH="$TMPCK:$PATH" "$WRAPPER" save-wifi-dhcp "MyNetwork" \
         "ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ" 2>/dev/null) || RC=$?
     [ $RC -ne 0 ] && ok "save-wifi-dhcp 64-char non-hex exits non-zero" || fail "save-wifi-dhcp 64-char non-hex should exit non-zero"
+
+    # ── save-wifi-static stub checks ────────────────────────────────────────
+    echo ""
+    echo "  [save-wifi-static stub checks]"
+
+    # Valid args → ok:true, ipv4_method=manual
+    RC=0; OUT=$(PATH="$TMPCK:$PATH" "$WRAPPER" save-wifi-static \
+        "MyNetwork" "password123" "192.168.1.100/24" "192.168.1.1" "8.8.8.8" 2>/dev/null) || RC=$?
+    [ $RC -eq 0 ] && ok "save-wifi-static exits 0 (valid)" || fail "save-wifi-static exited $RC (valid)"
+    check_json "$OUT" "save-wifi-static returns JSON (valid)"
+    echo "$OUT" | grep -q '"ok":true'               && ok "save-wifi-static.ok=true"              || fail "save-wifi-static.ok wrong: $OUT"
+    echo "$OUT" | grep -q '"ssid":"MyNetwork"'      && ok "save-wifi-static.ssid=MyNetwork"       || fail "save-wifi-static.ssid wrong: $OUT"
+    echo "$OUT" | grep -q '"ipv4_method":"manual"'  && ok "save-wifi-static.ipv4_method=manual"   || fail "save-wifi-static.ipv4_method wrong: $OUT"
+
+    # Valid with comma-separated DNS
+    RC=0; OUT=$(PATH="$TMPCK:$PATH" "$WRAPPER" save-wifi-static \
+        "MyNetwork" "password123" "10.0.0.5/8" "10.0.0.1" "8.8.8.8,8.8.4.4" 2>/dev/null) || RC=$?
+    [ $RC -eq 0 ] && ok "save-wifi-static multi-DNS exits 0" || fail "save-wifi-static multi-DNS exited $RC"
+
+    # Missing CIDR prefix (no slash) → error
+    RC=0; OUT=$(PATH="$TMPCK:$PATH" "$WRAPPER" save-wifi-static \
+        "MyNetwork" "password123" "192.168.1.100" "192.168.1.1" "8.8.8.8" 2>/dev/null) || RC=$?
+    [ $RC -ne 0 ] && ok "save-wifi-static no-slash CIDR exits non-zero" || fail "save-wifi-static no-slash CIDR should exit non-zero"
+    echo "$OUT" | grep -q '"error"' && ok "save-wifi-static no-slash CIDR returns error JSON" || fail "save-wifi-static no-slash CIDR missing error key: $OUT"
+
+    # Invalid CIDR prefix (> 32) → error
+    RC=0; OUT=$(PATH="$TMPCK:$PATH" "$WRAPPER" save-wifi-static \
+        "MyNetwork" "password123" "192.168.1.100/33" "192.168.1.1" "8.8.8.8" 2>/dev/null) || RC=$?
+    [ $RC -ne 0 ] && ok "save-wifi-static prefix>32 exits non-zero" || fail "save-wifi-static prefix>32 should exit non-zero"
+
+    # Invalid CIDR prefix (0) → error
+    RC=0; OUT=$(PATH="$TMPCK:$PATH" "$WRAPPER" save-wifi-static \
+        "MyNetwork" "password123" "192.168.1.100/0" "192.168.1.1" "8.8.8.8" 2>/dev/null) || RC=$?
+    [ $RC -ne 0 ] && ok "save-wifi-static prefix=0 exits non-zero" || fail "save-wifi-static prefix=0 should exit non-zero"
+
+    # Invalid address octets → error
+    RC=0; OUT=$(PATH="$TMPCK:$PATH" "$WRAPPER" save-wifi-static \
+        "MyNetwork" "password123" "999.1.1.1/24" "192.168.1.1" "8.8.8.8" 2>/dev/null) || RC=$?
+    [ $RC -ne 0 ] && ok "save-wifi-static bad address octet exits non-zero" || fail "save-wifi-static bad address octet should exit non-zero"
+
+    # Invalid gateway → error
+    RC=0; OUT=$(PATH="$TMPCK:$PATH" "$WRAPPER" save-wifi-static \
+        "MyNetwork" "password123" "192.168.1.100/24" "not-an-ip" "8.8.8.8" 2>/dev/null) || RC=$?
+    [ $RC -ne 0 ] && ok "save-wifi-static bad gateway exits non-zero" || fail "save-wifi-static bad gateway should exit non-zero"
+    echo "$OUT" | grep -q '"error"' && ok "save-wifi-static bad gateway returns error JSON" || fail "save-wifi-static bad gateway missing error key: $OUT"
+
+    # Invalid gateway octets → error
+    RC=0; OUT=$(PATH="$TMPCK:$PATH" "$WRAPPER" save-wifi-static \
+        "MyNetwork" "password123" "192.168.1.100/24" "256.0.0.1" "8.8.8.8" 2>/dev/null) || RC=$?
+    [ $RC -ne 0 ] && ok "save-wifi-static gateway octet>255 exits non-zero" || fail "save-wifi-static gateway octet>255 should exit non-zero"
+
+    # Invalid DNS entry → error
+    RC=0; OUT=$(PATH="$TMPCK:$PATH" "$WRAPPER" save-wifi-static \
+        "MyNetwork" "password123" "192.168.1.100/24" "192.168.1.1" "notadns" 2>/dev/null) || RC=$?
+    [ $RC -ne 0 ] && ok "save-wifi-static bad DNS exits non-zero" || fail "save-wifi-static bad DNS should exit non-zero"
+    echo "$OUT" | grep -q '"error"' && ok "save-wifi-static bad DNS returns error JSON" || fail "save-wifi-static bad DNS missing error key: $OUT"
+
+    # Invalid second DNS entry in comma list → error
+    RC=0; OUT=$(PATH="$TMPCK:$PATH" "$WRAPPER" save-wifi-static \
+        "MyNetwork" "password123" "192.168.1.100/24" "192.168.1.1" "8.8.8.8,bad" 2>/dev/null) || RC=$?
+    [ $RC -ne 0 ] && ok "save-wifi-static bad second DNS exits non-zero" || fail "save-wifi-static bad second DNS should exit non-zero"
+
+    # Missing DNS → error
+    RC=0; OUT=$(PATH="$TMPCK:$PATH" "$WRAPPER" save-wifi-static \
+        "MyNetwork" "password123" "192.168.1.100/24" "192.168.1.1" "" 2>/dev/null) || RC=$?
+    [ $RC -ne 0 ] && ok "save-wifi-static empty DNS exits non-zero" || fail "save-wifi-static empty DNS should exit non-zero"
 fi
 
 echo ""

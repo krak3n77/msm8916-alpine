@@ -4,10 +4,12 @@
 # network plugin backend. Never exposes PSK or raw .nmconnection content.
 #
 # Commands:
-#   status           →  {"interface":"wlan0","state":"connected","connection":"MySSID"}
-#   read             →  {"ssid":"MySSID","ipv4_method":"auto","address":"...","gateway":"...","dns":"..."}
-#   save-wifi-dhcp   →  {"ok":true,"ssid":"MySSID","ipv4_method":"auto"}
-#                        (validates SSID/password, writes NM profile, does NOT activate)
+#   status             →  {"interface":"wlan0","state":"connected","connection":"MySSID"}
+#   read               →  {"ssid":"MySSID","ipv4_method":"auto","address":"...","gateway":"...","dns":"..."}
+#   save-wifi-dhcp     →  {"ok":true,"ssid":"MySSID","ipv4_method":"auto"}
+#                          (validates SSID/password, writes NM DHCP profile, does NOT activate)
+#   save-wifi-static   →  {"ok":true,"ssid":"MySSID","ipv4_method":"manual"}
+#                          (validates SSID/password/CIDR/gateway/DNS, writes static profile, does NOT activate)
 #
 # All output to stdout is valid JSON. Exit 0 on success, 1 on error.
 # ponytail: no JSON escaping for values — SSIDs and IPs rarely contain quotes/backslashes.
@@ -101,8 +103,108 @@ save-wifi-dhcp)
     printf '{"ok":true,"ssid":"%s","ipv4_method":"auto"}\n' "$SSID"
     ;;
 
+save-wifi-static)
+    # Accepts: nm-wrapper save-wifi-static <ssid> <password> <address/cidr> <gateway> <dns>
+    # <dns> may be comma-separated (e.g. 8.8.8.8,8.8.4.4). Does NOT activate the connection.
+    SSID="${2:-}"
+    PASS="${3:-}"
+    ADDR="${4:-}"
+    GW="${5:-}"
+    DNS="${6:-}"
+
+    # Validate SSID (same rules as save-wifi-dhcp).
+    [ -z "$SSID" ] && die "ssid required"
+    SSID_LEN=$(printf '%s' "$SSID" | wc -c)
+    [ "$SSID_LEN" -gt 32 ] && die "ssid too long (max 32 bytes)"
+    printf '%s' "$SSID" | grep -q '[[:cntrl:]]' && die "ssid contains control characters"
+
+    # Validate WPA/WPA2-Personal passphrase (8-63 chars) or raw 64-char hex PSK.
+    [ -z "$PASS" ] && die "password required"
+    PASS_LEN=$(printf '%s' "$PASS" | wc -c)
+    if [ "$PASS_LEN" -eq 64 ]; then
+        NON_HEX=$(printf '%s' "$PASS" | tr -d '0-9a-fA-F')
+        [ -n "$NON_HEX" ] && die "64-char password must be hex PSK"
+    else
+        [ "$PASS_LEN" -lt 8 ] && die "password too short (min 8 chars)"
+        [ "$PASS_LEN" -gt 63 ] && die "password too long (max 63 chars)"
+        printf '%s' "$PASS" | grep -q '[[:cntrl:]]' && die "password contains control characters"
+    fi
+
+    # Validate address/CIDR — must contain a slash.
+    [ -z "$ADDR" ] && die "address/CIDR required"
+    case "$ADDR" in
+        */*) ;;
+        *) die "address must include CIDR prefix (e.g. 192.168.1.10/24)" ;;
+    esac
+    ADDR_IP="${ADDR%/*}"
+    ADDR_PFX="${ADDR##*/}"
+    printf '%s' "$ADDR_IP" | grep -qE '^([0-9]{1,3}\.){3}[0-9]{1,3}$' \
+        || die "invalid address: $ADDR_IP"
+    printf '%s' "$ADDR_IP" | awk -F. '($1>255||$2>255||$3>255||$4>255){exit 1}' \
+        || die "address octet out of range: $ADDR_IP"
+    case "$ADDR_PFX" in
+        ''|*[!0-9]*) die "invalid CIDR prefix: $ADDR_PFX" ;;
+    esac
+    if [ "$ADDR_PFX" -lt 1 ] || [ "$ADDR_PFX" -gt 32 ]; then
+        die "CIDR prefix out of range (1-32)"
+    fi
+
+    # Validate gateway: plain IPv4.
+    [ -z "$GW" ] && die "gateway required"
+    printf '%s' "$GW" | grep -qE '^([0-9]{1,3}\.){3}[0-9]{1,3}$' \
+        || die "invalid gateway: $GW"
+    printf '%s' "$GW" | awk -F. '($1>255||$2>255||$3>255||$4>255){exit 1}' \
+        || die "gateway octet out of range: $GW"
+
+    # Validate DNS: one or more comma-separated IPv4 addresses.
+    [ -z "$DNS" ] && die "dns required"
+    # ponytail: iterate with shell string ops so die() fires in the outer shell, not a subshell.
+    DNS_REST="${DNS},"
+    while [ -n "$DNS_REST" ]; do
+        DNSIP="${DNS_REST%%,*}"
+        DNS_REST="${DNS_REST#*,}"
+        printf '%s' "$DNSIP" | grep -qE '^([0-9]{1,3}\.){3}[0-9]{1,3}$' \
+            || die "invalid dns: $DNSIP"
+        printf '%s' "$DNSIP" | awk -F. '($1>255||$2>255||$3>255||$4>255){exit 1}' \
+            || die "dns octet out of range: $DNSIP"
+    done
+
+    # Look up connection for this interface (same logic as save-wifi-dhcp).
+    CONN=$(nmcli -g GENERAL.CONNECTION device show "$IFACE" 2>/dev/null | head -1) || CONN=""
+    [ "$CONN" = "--" ] && CONN=""
+    if [ -z "$CONN" ]; then
+        CONN=$(nmcli -g NAME,DEVICE connection show 2>/dev/null \
+            | grep ":${IFACE}$" | cut -d: -f1 | head -1) || CONN=""
+    fi
+
+    # nmcli expects space-separated DNS.
+    DNS_NM=$(printf '%s' "$DNS" | tr ',' ' ')
+
+    if [ -z "$CONN" ]; then
+        # ponytail: no existing connection — add profile, don't activate.
+        nmcli connection add type wifi ifname "$IFACE" con-name "$IFACE" ssid "$SSID" \
+            wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$PASS" \
+            ipv4.method manual ipv4.addresses "$ADDR" ipv4.gateway "$GW" ipv4.dns "$DNS_NM" \
+            connection.autoconnect yes 2>/dev/null \
+            || die "nmcli connection add failed"
+    else
+        nmcli connection modify "$CONN" \
+            802-11-wireless.ssid "$SSID" \
+            wifi-sec.key-mgmt wpa-psk \
+            wifi-sec.psk "$PASS" \
+            ipv4.method manual \
+            ipv4.addresses "$ADDR" \
+            ipv4.gateway "$GW" \
+            ipv4.dns "$DNS_NM" \
+            2>/dev/null \
+            || die "nmcli connection modify failed"
+    fi
+
+    printf '{"ok":true,"ssid":"%s","ipv4_method":"manual"}\n' "$SSID"
+    ;;
+
 *)
-    printf 'Usage: %s {status|read|save-wifi-dhcp}\n' "$(basename "$0")" >&2
+    printf 'Usage: %s {status|read|save-wifi-dhcp|save-wifi-static}\n' "$(basename "$0")" >&2
     exit 1
     ;;
 esac

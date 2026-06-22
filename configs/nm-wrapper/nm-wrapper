@@ -1,0 +1,55 @@
+#!/bin/sh
+# nm-wrapper: privileged NetworkManager read-only wrapper for wlan0.
+# Installed at /usr/local/sbin/nm-wrapper, called via sudo by the OctoPrint
+# network plugin backend. Never exposes PSK or raw .nmconnection content.
+#
+# Commands:
+#   status  →  {"interface":"wlan0","state":"connected","connection":"MySSID"}
+#   read    →  {"ssid":"MySSID","ipv4_method":"auto","address":"...","gateway":"...","dns":"..."}
+#
+# All output to stdout is valid JSON. Exit 0 on success, 1 on error.
+# ponytail: no JSON escaping for values — SSIDs and IPs rarely contain quotes/backslashes.
+set -eu
+
+IFACE="wlan0"
+
+# Print JSON error to stdout and exit 1 (caller checks exit code).
+die() { printf '{"error":"%s"}\n' "$*"; exit 1; }
+
+case "${1:-}" in
+
+status)
+    # Use nmcli terse device list to get state for our interface.
+    STATE=$(nmcli -g DEVICE,STATE device status 2>/dev/null \
+        | grep "^${IFACE}:" | cut -d: -f2 | head -1) \
+        || die "nmcli failed"
+    CONN=$(nmcli -g GENERAL.CONNECTION device show "$IFACE" 2>/dev/null | head -1) \
+        || CONN=""
+    [ "$CONN" = "--" ] && CONN=""
+    printf '{"interface":"%s","state":"%s","connection":"%s"}\n' \
+        "$IFACE" "${STATE:-unknown}" "$CONN"
+    ;;
+
+read)
+    # Identify active connection, then pull safe fields only (no PSK).
+    CONN=$(nmcli -g GENERAL.CONNECTION device show "$IFACE" 2>/dev/null | head -1) \
+        || die "nmcli failed"
+    [ -z "$CONN" ] || [ "$CONN" = "--" ] && die "no active connection on $IFACE"
+
+    SSID=$(nmcli -g 802-11-wireless.ssid connection show "$CONN" 2>/dev/null || true)
+    METHOD=$(nmcli -g ipv4.method connection show "$CONN" 2>/dev/null || echo "unknown")
+    ADDR=$(nmcli -g IP4.ADDRESS device show "$IFACE" 2>/dev/null | head -1 || true)
+    GW=$(nmcli -g IP4.GATEWAY device show "$IFACE" 2>/dev/null | head -1 || true)
+    # Multiple DNS servers are joined with commas.
+    DNS=$(nmcli -g IP4.DNS device show "$IFACE" 2>/dev/null \
+        | tr '\n' ',' | sed 's/,$//' || true)
+
+    printf '{"ssid":"%s","ipv4_method":"%s","address":"%s","gateway":"%s","dns":"%s"}\n' \
+        "${SSID:-}" "${METHOD:-unknown}" "${ADDR:-}" "${GW:-}" "${DNS:-}"
+    ;;
+
+*)
+    printf 'Usage: %s {status|read}\n' "$(basename "$0")" >&2
+    exit 1
+    ;;
+esac

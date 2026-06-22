@@ -1,0 +1,103 @@
+#!/bin/bash
+# nm-wrapper.check: self-check for nm-wrapper.
+# Works with or without a real NetworkManager (stubs nmcli when absent).
+# Usage: bash nm-wrapper.check [/path/to/nm-wrapper]
+# Exit 0 = all checks passed, 1 = failures.
+set -euo pipefail
+
+WRAPPER="${1:-/usr/local/sbin/nm-wrapper}"
+PASS=0; FAIL=0
+
+ok()   { echo "  PASS: $*"; PASS=$((PASS+1)); }
+fail() { echo "  FAIL: $*"; FAIL=$((FAIL+1)); }
+
+is_json() { echo "$1" | grep -qE '^\{.*\}$'; }
+
+check_json() {
+    local out="$1" label="$2"
+    is_json "$out" && ok "$label" || fail "$label (not JSON: $out)"
+}
+
+echo "=== nm-wrapper self-check ==="
+echo "    wrapper: $WRAPPER"
+
+# ── 1. syntax ───────────────────────────────────────────────────────────────
+bash -n "$WRAPPER" 2>/dev/null \
+    && ok "syntax check" || fail "syntax check"
+
+# ── 2. unknown command exits non-zero ────────────────────────────────────────
+"$WRAPPER" bogus >/dev/null 2>&1 && fail "unknown command should exit non-zero" \
+    || ok "unknown command exits non-zero"
+
+# ── 3. no-args exits non-zero ────────────────────────────────────────────────
+"$WRAPPER" >/dev/null 2>&1 && fail "no-args should exit non-zero" \
+    || ok "no-args exits non-zero"
+
+# ── 4. live checks (nmcli present) or stub checks ────────────────────────────
+if command -v nmcli >/dev/null 2>&1; then
+    echo "  [nmcli found — live checks]"
+
+    OUT=$("$WRAPPER" status 2>/dev/null); RC=$?
+    [ $RC -eq 0 ] && ok "status exits 0" || fail "status exited $RC"
+    check_json "$OUT" "status returns JSON"
+    echo "$OUT" | grep -q '"interface"'  && ok "status.interface present"  || fail "status missing 'interface'"
+    echo "$OUT" | grep -q '"state"'      && ok "status.state present"      || fail "status missing 'state'"
+    echo "$OUT" | grep -q '"connection"' && ok "status.connection present"  || fail "status missing 'connection'"
+
+    OUT=$("$WRAPPER" read 2>/dev/null); RC=$?
+    check_json "$OUT" "read returns JSON"
+    if [ $RC -eq 0 ]; then
+        echo "$OUT" | grep -q '"ssid"'        && ok "read.ssid present"        || fail "read missing 'ssid'"
+        echo "$OUT" | grep -q '"ipv4_method"' && ok "read.ipv4_method present" || fail "read missing 'ipv4_method'"
+        echo "$OUT" | grep -q '"address"'     && ok "read.address present"     || fail "read missing 'address'"
+        echo "$OUT" | grep -q '"gateway"'     && ok "read.gateway present"     || fail "read missing 'gateway'"
+        echo "$OUT" | grep -q '"dns"'         && ok "read.dns present"         || fail "read missing 'dns'"
+    else
+        echo "  [read returned error — no active wlan0 connection, checking error JSON]"
+        echo "$OUT" | grep -q '"error"' && ok "error response has 'error' key" || fail "error response missing 'error'"
+    fi
+
+else
+    echo "  [nmcli not found — stub checks]"
+
+    # Build a stub nmcli in a temp dir.
+    TMPCK=$(mktemp -d)
+    trap 'rm -rf "$TMPCK"' EXIT
+
+    cat > "$TMPCK/nmcli" <<'STUB'
+#!/bin/sh
+# Stub nmcli — matches the exact call patterns used by nm-wrapper.
+case "$*" in
+    *DEVICE,STATE*)                          echo "wlan0:connected"; echo "lo:unmanaged" ;;
+    *GENERAL.CONNECTION*device*show*wlan0*)  echo "TestSSID" ;;
+    *802-11-wireless.ssid*connection*show*)  echo "TestSSID" ;;
+    *ipv4.method*connection*show*)           echo "auto" ;;
+    *IP4.ADDRESS*device*show*wlan0*)         echo "192.168.1.100/24" ;;
+    *IP4.GATEWAY*device*show*wlan0*)         echo "192.168.1.1" ;;
+    *IP4.DNS*device*show*wlan0*)             printf "8.8.8.8\n8.8.4.4\n" ;;
+    *)                                       echo "stub: unhandled args: $*" >&2; exit 1 ;;
+esac
+STUB
+    chmod +x "$TMPCK/nmcli"
+
+    # Run wrapper with stub nmcli injected via PATH.
+    OUT=$(PATH="$TMPCK:$PATH" "$WRAPPER" status 2>/dev/null); RC=$?
+    [ $RC -eq 0 ] && ok "status exits 0 (stub)" || fail "status exited $RC (stub)"
+    check_json "$OUT" "status returns JSON (stub)"
+    echo "$OUT" | grep -q '"interface":"wlan0"'    && ok "status.interface=wlan0"   || fail "status.interface wrong: $OUT"
+    echo "$OUT" | grep -q '"state":"connected"'    && ok "status.state=connected"   || fail "status.state wrong: $OUT"
+    echo "$OUT" | grep -q '"connection":"TestSSID"' && ok "status.connection=TestSSID" || fail "status.connection wrong: $OUT"
+
+    OUT=$(PATH="$TMPCK:$PATH" "$WRAPPER" read 2>/dev/null); RC=$?
+    [ $RC -eq 0 ] && ok "read exits 0 (stub)" || fail "read exited $RC (stub)"
+    check_json "$OUT" "read returns JSON (stub)"
+    echo "$OUT" | grep -q '"ssid":"TestSSID"'       && ok "read.ssid=TestSSID"       || fail "read.ssid wrong: $OUT"
+    echo "$OUT" | grep -q '"ipv4_method":"auto"'    && ok "read.ipv4_method=auto"    || fail "read.ipv4_method wrong: $OUT"
+    echo "$OUT" | grep -q '"address":"192.168.'     && ok "read.address present"     || fail "read.address wrong: $OUT"
+    echo "$OUT" | grep -q '"gateway":"192.168.1.1"' && ok "read.gateway correct"     || fail "read.gateway wrong: $OUT"
+    echo "$OUT" | grep -q '"dns":"8.8.8.8'          && ok "read.dns has first entry" || fail "read.dns wrong: $OUT"
+fi
+
+echo ""
+echo "=== Results: $PASS passed, $FAIL failed ==="
+[ "$FAIL" -eq 0 ] && exit 0 || exit 1

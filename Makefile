@@ -1,6 +1,7 @@
 .PHONY: builder build-vm build-all-vm fetch dts _check-env clean build build-all \
         octoprint docker zoraxy verify-octoprint \
-        kernel-env-check modules kernel-env kernel-modules
+        kernel-env-check modules kernel-env kernel-modules \
+        plugins
 
 # ponytail: pass PROFILE=<name> on the make command line, e.g. make build PROFILE=octoprint
 export PROFILE ?=
@@ -74,3 +75,10 @@ kernel-env: _check-env
 	bash scripts/setup-kernel-build.sh
 
 kernel-modules: modules
+
+# Plugin zip artifacts (host-side, no VM needed)
+plugins:
+	cd plugins/octoprint-led-status && \
+	  mkdir -p dist && \
+	  zip -r dist/OctoPrint-LedStatus-1.0.0.zip setup.py smoke_check.py octoprint_led_status/
+	@echo "[+] plugins/octoprint-led-status/dist/OctoPrint-LedStatus-1.0.0.zip"

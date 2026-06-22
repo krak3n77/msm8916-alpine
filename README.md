@@ -165,7 +165,7 @@ make zoraxy      # Zoraxy: native reverse proxy, no Docker
 
 Profile images are **minimal**: only the packages and services for the chosen appliance are installed. Installer scripts for other stacks are **not** copied to the device — the selected stack is wired in at build time.
 
-USB gadget tooling (`usb-gadget`, `/etc/usb-gadget.conf`) is present in **every** profile. The default mode (NCM/RNDIS/OTG) and whether the service auto-starts at boot are controlled by profile variables (`USB_GADGET_ENABLED`, `USB_GADGET_OTG`).
+USB gadget tooling (`usb-gadget`, `/etc/usb-gadget.conf`) is installed and auto-started in the **default**, **docker**, and **zoraxy** profiles. The **octoprint** profile is the exception: it sets `USB_GADGET_INSTALL="no"` because the USB port is used as host for the printer — gadget tooling is omitted and USB OTG host mode is forced at boot instead (`USB_GADGET_OTG="yes"`).
 
 > **Vagrant artifact flow:** Profile targets (`make octoprint`, `make docker`, `make zoraxy`) run `make build-all PROFILE=...` inside the VM or CI and do **not** call `make fetch`. After the build finishes, exit the VM and run `make fetch` on the host to copy artifacts. The host targets `make build-vm` / `make build-all-vm` handle the full cycle (up → build → fetch) automatically but are generic — they do not set a profile.
 
@@ -526,7 +526,7 @@ On first boot, the system will automatically:
 After flashing and first boot, confirm the selected profile is active:
 
 ```bash
-# USB gadget tooling — present in every profile
+# USB gadget tooling (default, docker, zoraxy profiles — not octoprint)
 usb-gadget status
 
 # OctoPrint profile

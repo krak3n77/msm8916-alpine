@@ -43,9 +43,21 @@ echo ""
 echo "-- 2. USB gadget policy --"
 
 if grep -q 'USB_GADGET_INSTALL="no"' "$REPO/profiles/octoprint.env"; then
-    ok "OctoPrint profile does not install usb-gadget tooling"
+    ok "OctoPrint profile disables USB gadget install (USB_GADGET_INSTALL=no)"
 else
     fail "OctoPrint profile should set USB_GADGET_INSTALL=\"no\""
+fi
+
+if grep -q 'USB_GADGET_ENABLED="no"' "$REPO/profiles/octoprint.env"; then
+    ok "OctoPrint profile disables USB gadget autostart (USB_GADGET_ENABLED=no)"
+else
+    fail "OctoPrint profile should set USB_GADGET_ENABLED=\"no\""
+fi
+
+if grep -q 'USB_GADGET_OTG="yes"' "$REPO/profiles/octoprint.env"; then
+    ok "OctoPrint profile enables USB host (OTG) mode for printer (USB_GADGET_OTG=yes)"
+else
+    fail "OctoPrint profile should set USB_GADGET_OTG=\"yes\" to enable USB host path"
 fi
 
 if grep -q 'if \[ "$USB_GADGET_INSTALL" = "yes" \]' "$REPO/scripts/generate_alpine_rootfs.sh"; then
@@ -54,20 +66,32 @@ else
     fail "Rootfs generator installs usb-gadget unconditionally"
 fi
 
+if grep -q 'if \[ "$USB_GADGET_ENABLED" = "yes" \]' "$REPO/scripts/generate_alpine_rootfs.sh"; then
+    ok "Rootfs generator gates usb-gadget autostart on USB_GADGET_ENABLED"
+else
+    fail "Rootfs generator starts usb-gadget unconditionally"
+fi
+
 # ---- 3. Idempotency guard ------------------------------------
 echo ""
 echo "-- 3. Idempotency guard --"
 
-if grep -q 'already up to date, nothing to do' "$REPO/stacks/install-octoprint.sh"; then
-    ok "Installer skips reinstall when installed version matches latest"
+if grep -q 'skipping pip reinstall' "$REPO/stacks/install-octoprint.sh"; then
+    ok "Installer skips pip reinstall when version already matches (NEEDS_INSTALL=0)"
 else
-    fail "Installer missing version idempotency guard"
+    fail "Installer missing pip-skip idempotency guard"
 fi
 
-if grep -q 'if \[ ! -d.*DATA_DIR' "$REPO/stacks/install-octoprint.sh"; then
-    ok "Installer preserves DATA_DIR on rerun (no data wipe)"
+if grep -q 'rc-update add octoprint' "$REPO/stacks/install-octoprint.sh"; then
+    ok "Installer always refreshes integration files (service, sudoers) outside pip gate"
 else
-    fail "Installer does not preserve DATA_DIR on rerun"
+    fail "Installer missing unconditional integration refresh (rc-update add octoprint)"
+fi
+
+if grep -q 'if \[ ! -f.*config.yaml' "$REPO/stacks/install-octoprint.sh"; then
+    ok "Installer preserves existing config.yaml on rerun (no user-config wipe)"
+else
+    fail "Installer does not guard config.yaml write — may overwrite user config on rerun"
 fi
 
 # ---- 4. OctoPrint no-LTE DTB profile -------------------------
@@ -138,7 +162,8 @@ cat <<'MANUAL'
 2. Installer reruns safely (no data wipe):
      # While OctoPrint is installed, run the installer again:
      sudo bash ~/install-octoprint.sh
-     # Expect: "already up to date, nothing to do." — no reinstall, no removal of /var/lib/octoprint
+     # Expect: "already installed — skipping pip reinstall." then service/sudoers refresh
+     # Data dir /var/lib/octoprint is preserved; config.yaml only written if absent
 
 3. Memory — compare free RAM before and after the OctoPrint DTB:
      # Boot with generic DTB (msm8916-yiming-uz801v3.dtb) and note:

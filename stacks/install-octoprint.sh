@@ -70,12 +70,28 @@ run_quiet "$VENV_DIR/bin/pip" install --quiet --upgrade pip
 run_quiet "$VENV_DIR/bin/pip" install --quiet "OctoPrint==$LATEST"
 
 echo "$LATEST" > "$VERSION_FILE"
+
+if [ ! -f "$DATA_DIR/config.yaml" ]; then
+    log "[*] Installing default OctoPrint config..."
+    cat > "$DATA_DIR/config.yaml" <<'YAML'
+server:
+  commands:
+    serverRestartCommand: sudo /sbin/rc-service octoprint restart
+    systemRestartCommand: sudo /sbin/reboot
+    systemShutdownCommand: sudo /sbin/poweroff
+webcam:
+  stream:
+  snapshot:
+  ffmpeg:
+YAML
+fi
+
 chown -R "$OCTOPRINT_USER:$OCTOPRINT_USER" "$INSTALL_DIR" "$DATA_DIR"
 
 
 log "[*] Allowing OctoPrint UI power controls via sudo..."
 cat > /etc/sudoers.d/octoprint <<'SUDOERS'
-octoprint ALL=(root) NOPASSWD: /sbin/rc-service octoprint restart, /sbin/reboot, /sbin/poweroff
+octoprint ALL=(root) NOPASSWD: /sbin/rc-service octoprint restart, /sbin/reboot, /sbin/poweroff, /sbin/halt
 SUDOERS
 chmod 0440 /etc/sudoers.d/octoprint
 
@@ -131,5 +147,5 @@ log "    Service : /etc/init.d/octoprint (enabled in default runlevel)"
 log ""
 log "[*] Start now with: rc-service octoprint start"
 log "    Web UI  : http://<device-ip>:5000"
-log "    UI cmds : sudo rc-service octoprint restart | sudo reboot | sudo poweroff"
-log "    ffmpeg  : installed (webcam live monitoring; timelapse not configured)"
+log "    UI cmds : sudo /sbin/rc-service octoprint restart | sudo /sbin/reboot | sudo /sbin/poweroff"
+log "    Webcam  : disabled by default (no stream/snapshot; ffmpeg installed for later RTSP/timelapse)"

@@ -59,14 +59,14 @@ zoraxy: _check-env
 verify-octoprint:
 	./stacks/verify-octoprint.sh
 
-# Kernel build environment for out-of-tree modules (issue-002)
+# USB serial modules for OctoPrint
 kernel-env-check:
 	bash scripts/validate-kernel-env.sh
+
+modules: _check-env
+	bash scripts/make_modules.sh
 
 kernel-env: _check-env
 	bash scripts/setup-kernel-build.sh
 
-# Compile USB serial modules + verify vermagic (issue-004)
-# Requires: make kernel-env first
-kernel-modules: _check-env
-	bash scripts/build-usb-modules.sh
+kernel-modules: modules

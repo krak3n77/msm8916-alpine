@@ -41,13 +41,20 @@ echo "  CROSS   : ${CROSS_COMPILE:-<native arm64>}"
 echo ""
 
 # --- 1. Build USB serial drivers (usbserial.ko + ch341.ko + ftdi_sio.ko + pl2303.ko) ---
-# ponytail: build whole subdir to pull in usbserial.ko dep alongside protocol drivers
-make -C "$KSRC" ARCH=arm64 CROSS_COMPILE="$CROSS_COMPILE" drivers/usb/serial/
+# ponytail: directory target is a no-op here; ask kbuild for exact .ko files.
+for target in \
+    drivers/usb/serial/usbserial.ko \
+    drivers/usb/serial/ch341.ko \
+    drivers/usb/serial/ftdi_sio.ko \
+    drivers/usb/serial/pl2303.ko
+ do
+    make -C "$KSRC" ARCH=arm64 CROSS_COMPILE="$CROSS_COMPILE" KBUILD_MODPOST_WARN=1 "$target"
+done
 
 # --- 2. Build CDC ACM if enabled as module ---
 if grep -q '^CONFIG_USB_ACM=m' "$KSRC/.config"; then
     echo "[+] CONFIG_USB_ACM=m found — building cdc-acm.ko ..."
-    make -C "$KSRC" ARCH=arm64 CROSS_COMPILE="$CROSS_COMPILE" drivers/usb/class/cdc-acm.ko
+    make -C "$KSRC" ARCH=arm64 CROSS_COMPILE="$CROSS_COMPILE" KBUILD_MODPOST_WARN=1 drivers/usb/class/cdc-acm.ko
 else
     echo "[=] CONFIG_USB_ACM not =m in .config, skipping cdc-acm.ko"
 fi

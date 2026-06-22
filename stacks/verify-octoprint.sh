@@ -101,15 +101,24 @@ fi
 echo ""
 echo "-- 5. USB serial module artifacts --"
 _KERNEL_VER="6.12.1-msm8916"
-_ARTIFACT_DIR="$REPO/kernel-build/artifacts/${_KERNEL_VER}/modules"
+_ARTIFACT_DIR="$REPO/modules/octoprint-usb-serial/${_KERNEL_VER}"
 for _mod in ch341.ko usbserial.ko cdc-acm.ko; do
     if [ -f "$_ARTIFACT_DIR/$_mod" ]; then
         ok "USB module artifact present: ${_mod}"
     else
-        fail "USB module artifact missing: ${_mod}  (run: make kernel-env && make kernel-modules)"
+        fail "USB module artifact missing: ${_mod} in modules/octoprint-usb-serial/${_KERNEL_VER}"
     fi
 done
 unset _KERNEL_VER _ARTIFACT_DIR _mod
+
+if grep -q 'octoprint-usb.start' "$REPO/scripts/generate_alpine_rootfs.sh" \
+    && grep -q 'echo host > "$ROLE"' "$REPO/scripts/generate_alpine_rootfs.sh" \
+    && grep -q 'modprobe ch341' "$REPO/scripts/generate_alpine_rootfs.sh" \
+    && grep -q 'modprobe cdc_acm' "$REPO/scripts/generate_alpine_rootfs.sh"; then
+    ok "OctoPrint image forces USB host mode and preloads serial modules at boot"
+else
+    fail "OctoPrint image missing USB host/module boot setup"
+fi
 
 # ---- Summary --------------------------------------------------
 echo ""

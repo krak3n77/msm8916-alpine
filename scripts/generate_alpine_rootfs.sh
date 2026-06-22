@@ -321,7 +321,7 @@ chmod +x "$CHROOT/etc/local.d/zram.start"
 if [ "$OCTOPRINT_PREINSTALL" = "yes" ]; then
     # --- USB serial modules (issue-005) ---
     KERNEL_VER="6.12.1-msm8916"
-    USB_MOD_SRC="$(pwd)/kernel-build/artifacts/${KERNEL_VER}/modules"
+    USB_MOD_SRC="$(pwd)/modules/octoprint-usb-serial/${KERNEL_VER}"
     USB_REQUIRED_MODS="ch341.ko usbserial.ko cdc-acm.ko"
 
     # Fail clearly if required modules are missing
@@ -331,7 +331,6 @@ if [ "$OCTOPRINT_PREINSTALL" = "yes" ]; then
     done
     if [ -n "$_missing" ]; then
         echo "ERROR: Missing required USB serial modules for OctoPrint:${_missing}"
-        echo "       Build them first:  make kernel-env && make kernel-modules"
         echo "       Expected in:       $USB_MOD_SRC/"
         exit 1
     fi
@@ -348,6 +347,20 @@ if [ "$OCTOPRINT_PREINSTALL" = "yes" ]; then
 
     # Build module index so modprobe ch341 works on first boot
     chroot "$CHROOT" depmod -a "${KERNEL_VER}"
+
+    # Force USB host mode and preload printer serial drivers at boot.
+    cat > "$CHROOT/etc/local.d/octoprint-usb.start" << 'EOF'
+#!/bin/sh
+ROLE=/sys/class/usb_role/ci_hdrc.0-role-switch/role
+for _ in 1 2 3 4 5; do
+    [ -w "$ROLE" ] && { echo host > "$ROLE"; break; }
+    sleep 1
+done
+modprobe usbserial 2>/dev/null || true
+modprobe ch341 2>/dev/null || true
+modprobe cdc_acm 2>/dev/null || true
+EOF
+    chmod +x "$CHROOT/etc/local.d/octoprint-usb.start"
 
     echo "[*] Preinstalling OctoPrint..."
     install -Dm0755 stacks/install-octoprint.sh "$CHROOT/tmp/install-octoprint.sh"

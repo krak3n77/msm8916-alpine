@@ -23,8 +23,8 @@ log "[+] Installed $WRAPPER_DST"
 #           are independent and idempotent when rerun in either order.
 log "[*] Writing sudoers entry $SUDOERS_FILE ..."
 cat > "$SUDOERS_FILE" <<SUDOERS
-# OctoPrint network plugin: read-only NM wrapper access.
-$OCTOPRINT_USER ALL=(root) NOPASSWD: $WRAPPER_DST status, $WRAPPER_DST read
+# OctoPrint network plugin: NM wrapper access (read + DHCP config write).
+$OCTOPRINT_USER ALL=(root) NOPASSWD: $WRAPPER_DST status, $WRAPPER_DST read, $WRAPPER_DST save-wifi-dhcp
 SUDOERS
 chmod 0440 "$SUDOERS_FILE"
 log "[+] Wrote $SUDOERS_FILE"

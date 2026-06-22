@@ -75,6 +75,9 @@ case "$*" in
     *IP4.ADDRESS*device*show*wlan0*)         echo "192.168.1.100/24" ;;
     *IP4.GATEWAY*device*show*wlan0*)         echo "192.168.1.1" ;;
     *IP4.DNS*device*show*wlan0*)             printf "8.8.8.8\n8.8.4.4\n" ;;
+    *NAME,DEVICE*connection*show*)           echo "wlan0:wlan0" ;;
+    *connection*modify*)                     exit 0 ;;
+    *connection*add*)                        exit 0 ;;
     *)                                       echo "stub: unhandled args: $*" >&2; exit 1 ;;
 esac
 STUB
@@ -96,6 +99,50 @@ STUB
     echo "$OUT" | grep -q '"address":"192.168.'     && ok "read.address present"     || fail "read.address wrong: $OUT"
     echo "$OUT" | grep -q '"gateway":"192.168.1.1"' && ok "read.gateway correct"     || fail "read.gateway wrong: $OUT"
     echo "$OUT" | grep -q '"dns":"8.8.8.8'          && ok "read.dns has first entry" || fail "read.dns wrong: $OUT"
+
+    # ── save-wifi-dhcp stub checks ──────────────────────────────────────────
+    echo ""
+    echo "  [save-wifi-dhcp stub checks]"
+
+    # ponytail: use RC=0; OUT=$(...)|| RC=$? to avoid set -e firing on expected non-zero exits.
+
+    # Valid SSID + valid password → ok:true
+    RC=0; OUT=$(PATH="$TMPCK:$PATH" "$WRAPPER" save-wifi-dhcp "MyNetwork" "password123" 2>/dev/null) || RC=$?
+    [ $RC -eq 0 ] && ok "save-wifi-dhcp exits 0 (valid)" || fail "save-wifi-dhcp exited $RC (valid)"
+    check_json "$OUT" "save-wifi-dhcp returns JSON (valid)"
+    echo "$OUT" | grep -q '"ok":true'            && ok "save-wifi-dhcp.ok=true"           || fail "save-wifi-dhcp.ok wrong: $OUT"
+    echo "$OUT" | grep -q '"ssid":"MyNetwork"'   && ok "save-wifi-dhcp.ssid=MyNetwork"    || fail "save-wifi-dhcp.ssid wrong: $OUT"
+    echo "$OUT" | grep -q '"ipv4_method":"auto"' && ok "save-wifi-dhcp.ipv4_method=auto"  || fail "save-wifi-dhcp.ipv4_method wrong: $OUT"
+
+    # 64-char hex raw PSK → ok
+    RC=0; OUT=$(PATH="$TMPCK:$PATH" "$WRAPPER" save-wifi-dhcp "MyNetwork" \
+        "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2" 2>/dev/null) || RC=$?
+    [ $RC -eq 0 ] && ok "save-wifi-dhcp 64-char hex PSK exits 0" || fail "save-wifi-dhcp 64-char hex PSK exited $RC"
+
+    # Missing SSID → error, exit 1
+    RC=0; OUT=$(PATH="$TMPCK:$PATH" "$WRAPPER" save-wifi-dhcp "" "password123" 2>/dev/null) || RC=$?
+    [ $RC -ne 0 ] && ok "save-wifi-dhcp empty SSID exits non-zero" || fail "save-wifi-dhcp empty SSID should exit non-zero"
+    echo "$OUT" | grep -q '"error"' && ok "save-wifi-dhcp empty SSID returns error JSON" || fail "save-wifi-dhcp empty SSID missing error key: $OUT"
+
+    # SSID > 32 chars → error
+    LONG_SSID="ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567"
+    RC=0; OUT=$(PATH="$TMPCK:$PATH" "$WRAPPER" save-wifi-dhcp "$LONG_SSID" "password123" 2>/dev/null) || RC=$?
+    [ $RC -ne 0 ] && ok "save-wifi-dhcp long SSID exits non-zero" || fail "save-wifi-dhcp long SSID should exit non-zero"
+
+    # Password too short → error
+    RC=0; OUT=$(PATH="$TMPCK:$PATH" "$WRAPPER" save-wifi-dhcp "MyNetwork" "short" 2>/dev/null) || RC=$?
+    [ $RC -ne 0 ] && ok "save-wifi-dhcp short password exits non-zero" || fail "save-wifi-dhcp short password should exit non-zero"
+    echo "$OUT" | grep -q '"error"' && ok "save-wifi-dhcp short password returns error JSON" || fail "save-wifi-dhcp short password missing error key: $OUT"
+
+    # Password too long (65 non-hex chars) → error
+    LONG_PASS="AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    RC=0; OUT=$(PATH="$TMPCK:$PATH" "$WRAPPER" save-wifi-dhcp "MyNetwork" "$LONG_PASS" 2>/dev/null) || RC=$?
+    [ $RC -ne 0 ] && ok "save-wifi-dhcp long password exits non-zero" || fail "save-wifi-dhcp long password should exit non-zero"
+
+    # 64-char non-hex → error
+    RC=0; OUT=$(PATH="$TMPCK:$PATH" "$WRAPPER" save-wifi-dhcp "MyNetwork" \
+        "ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ" 2>/dev/null) || RC=$?
+    [ $RC -ne 0 ] && ok "save-wifi-dhcp 64-char non-hex exits non-zero" || fail "save-wifi-dhcp 64-char non-hex should exit non-zero"
 fi
 
 echo ""

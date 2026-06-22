@@ -4,8 +4,10 @@
 # network plugin backend. Never exposes PSK or raw .nmconnection content.
 #
 # Commands:
-#   status  →  {"interface":"wlan0","state":"connected","connection":"MySSID"}
-#   read    →  {"ssid":"MySSID","ipv4_method":"auto","address":"...","gateway":"...","dns":"..."}
+#   status           →  {"interface":"wlan0","state":"connected","connection":"MySSID"}
+#   read             →  {"ssid":"MySSID","ipv4_method":"auto","address":"...","gateway":"...","dns":"..."}
+#   save-wifi-dhcp   →  {"ok":true,"ssid":"MySSID","ipv4_method":"auto"}
+#                        (validates SSID/password, writes NM profile, does NOT activate)
 #
 # All output to stdout is valid JSON. Exit 0 on success, 1 on error.
 # ponytail: no JSON escaping for values — SSIDs and IPs rarely contain quotes/backslashes.
@@ -48,8 +50,59 @@ read)
         "${SSID:-}" "${METHOD:-unknown}" "${ADDR:-}" "${GW:-}" "${DNS:-}"
     ;;
 
+save-wifi-dhcp)
+    # Accepts: nm-wrapper save-wifi-dhcp <ssid> <password>
+    # Writes DHCP config to NetworkManager. Does NOT activate the connection.
+    SSID="${2:-}"
+    PASS="${3:-}"
+
+    # Validate SSID: 1-32 bytes, no control characters (IEEE 802.11).
+    [ -z "$SSID" ] && die "ssid required"
+    SSID_LEN=$(printf '%s' "$SSID" | wc -c)
+    [ "$SSID_LEN" -gt 32 ] && die "ssid too long (max 32 bytes)"
+    printf '%s' "$SSID" | grep -q '[[:cntrl:]]' && die "ssid contains control characters"
+
+    # Validate WPA/WPA2-Personal passphrase (8-63 chars) or raw 64-char hex PSK.
+    [ -z "$PASS" ] && die "password required"
+    PASS_LEN=$(printf '%s' "$PASS" | wc -c)
+    if [ "$PASS_LEN" -eq 64 ]; then
+        NON_HEX=$(printf '%s' "$PASS" | tr -d '0-9a-fA-F')
+        [ -n "$NON_HEX" ] && die "64-char password must be hex PSK"
+    else
+        [ "$PASS_LEN" -lt 8 ] && die "password too short (min 8 chars)"
+        [ "$PASS_LEN" -gt 63 ] && die "password too long (max 63 chars)"
+        printf '%s' "$PASS" | grep -q '[[:cntrl:]]' && die "password contains control characters"
+    fi
+
+    # Look up connection for this interface (active first, then any by interface).
+    CONN=$(nmcli -g GENERAL.CONNECTION device show "$IFACE" 2>/dev/null | head -1) || CONN=""
+    [ "$CONN" = "--" ] && CONN=""
+    if [ -z "$CONN" ]; then
+        CONN=$(nmcli -g NAME,DEVICE connection show 2>/dev/null \
+            | grep ":${IFACE}$" | cut -d: -f1 | head -1) || CONN=""
+    fi
+
+    if [ -z "$CONN" ]; then
+        # ponytail: no existing connection — add profile, don't activate.
+        nmcli connection add type wifi ifname "$IFACE" con-name "$IFACE" ssid "$SSID" \
+            wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$PASS" \
+            ipv4.method auto connection.autoconnect yes 2>/dev/null \
+            || die "nmcli connection add failed"
+    else
+        nmcli connection modify "$CONN" \
+            802-11-wireless.ssid "$SSID" \
+            wifi-sec.key-mgmt wpa-psk \
+            wifi-sec.psk "$PASS" \
+            ipv4.method auto \
+            2>/dev/null \
+            || die "nmcli connection modify failed"
+    fi
+
+    printf '{"ok":true,"ssid":"%s","ipv4_method":"auto"}\n' "$SSID"
+    ;;
+
 *)
-    printf 'Usage: %s {status|read}\n' "$(basename "$0")" >&2
+    printf 'Usage: %s {status|read|save-wifi-dhcp}\n' "$(basename "$0")" >&2
     exit 1
     ;;
 esac

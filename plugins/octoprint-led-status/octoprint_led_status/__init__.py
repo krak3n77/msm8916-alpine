@@ -2,8 +2,8 @@
 OctoPrint-LedStatus: visual LED feedback for printer states.
 
 Calls /usr/local/sbin/led-helper via sudo to control:
-  green:wan  — on=idle/ready, off=disconnected/error
-  blue:wlan  — off=idle/ready, fast-blink=disconnected/error
+  green:wan  — on=idle/ready/printing/paused, off=disconnected/error/off
+  blue:wlan  — off=idle, on=printing, slow-blink=paused, fast-blink=disconnected/error
 
 red:power is never touched.
 """
@@ -30,16 +30,29 @@ def _set_led_state(state):
 
 class LedStatusPlugin(
     octoprint.plugin.StartupPlugin,
+    octoprint.plugin.ShutdownPlugin,
     octoprint.plugin.EventHandlerPlugin,
 ):
     def on_after_startup(self):
         # Safe default: assume disconnected until we hear otherwise.
         _set_led_state("disconnected")
 
+    def on_shutdown(self):
+        _set_led_state("off")
+
     def on_event(self, event, payload):
-        if event == events.Events.CONNECTED:
+        e = events.Events
+        if event == e.CONNECTED:
             _set_led_state("idle")
-        elif event in (events.Events.DISCONNECTED, events.Events.ERROR):
+        elif event in (e.DISCONNECTED, e.ERROR):
+            _set_led_state("disconnected")
+        elif event in (e.PRINT_STARTED, e.PRINT_RESUMED):
+            _set_led_state("printing")
+        elif event == e.PRINT_PAUSED:
+            _set_led_state("paused")
+        elif event in (e.PRINT_DONE, e.PRINT_CANCELLED):
+            _set_led_state("idle")
+        elif event == e.PRINT_FAILED:
             _set_led_state("disconnected")
 
 

@@ -16,6 +16,17 @@ def test_helper_syntax():
     print("  [OK] helper shell syntax valid")
 
 
+def test_helper_accepts_new_states():
+    with open(HELPER) as f:
+        src = f.read()
+    for state in ["printing", "paused", "error", "off"]:
+        assert state + ")" in src or state + "|" in src, f"helper missing state: {state}"
+    # Syntax still valid
+    r = subprocess.run(["sh", "-n", HELPER], capture_output=True, text=True)
+    assert r.returncode == 0, f"helper syntax broken: {r.stderr}"
+    print("  [OK] helper contains all new state cases")
+
+
 def test_helper_rejects_unknown():
     r = subprocess.run(["sh", HELPER, "bogus"], capture_output=True, text=True)
     assert r.returncode != 0, "helper must reject unknown state"
@@ -41,8 +52,8 @@ def _set_led_state(state):
                        capture_output=True, timeout=5)
     except Exception:
         pass
-_set_led_state("idle")
-_set_led_state("disconnected")
+for s in ["idle", "printing", "paused", "disconnected", "error", "off"]:
+    _set_led_state(s)
 print("ok")
 """
     r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
@@ -53,7 +64,7 @@ print("ok")
 if __name__ == "__main__":
     print("OctoPrint-LedStatus smoke check")
     failures = []
-    for t in [test_helper_syntax, test_helper_rejects_unknown, test_no_red_power, test_degrade]:
+    for t in [test_helper_syntax, test_helper_accepts_new_states, test_helper_rejects_unknown, test_no_red_power, test_degrade]:
         try:
             t()
         except Exception as e:

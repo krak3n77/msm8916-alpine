@@ -1,3 +1,7 @@
+.PHONY: builder build-vm build-all-vm fetch dts _check-env clean build build-all \
+        octoprint docker zoraxy verify-octoprint \
+        kernel-env-check modules kernel-env kernel-modules
+
 # ponytail: pass PROFILE=<name> on the make command line, e.g. make build PROFILE=octoprint
 export PROFILE ?=
 
@@ -11,13 +15,13 @@ builder:
 build-vm:
 	vagrant up
 	vagrant rsync
-	vagrant ssh -c "cd /app && sudo make build"
+	vagrant ssh -c "cd /app && sudo make build PROFILE=$(PROFILE)"
 	$(MAKE) fetch
 
 build-all-vm:
 	vagrant up
 	vagrant rsync
-	vagrant ssh -c "cd /app && sudo make build-all"
+	vagrant ssh -c "cd /app && sudo make build-all PROFILE=$(PROFILE)"
 	$(MAKE) fetch
 
 fetch:

@@ -6,6 +6,9 @@ INSTALL_DIR="/opt/octoprint"
 VENV_DIR="$INSTALL_DIR/venv"
 DATA_DIR="/var/lib/octoprint"
 VERSION_FILE="$INSTALL_DIR/version"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+NETWORK_PLUGIN_SRC="${NETWORK_PLUGIN_SRC:-$SCRIPT_DIR/../octoprint-network-settings}"
+NETWORK_PLUGIN_NAME="OctoPrint-NetworkSettings"
 YES=0
 
 while [ $# -gt 0 ]; do
@@ -87,6 +90,24 @@ else
     log "[+] Resource Monitor $RM_VERSION installed."
 fi
 
+NETWORK_PLUGIN_VERSION=""
+if [ -f "$NETWORK_PLUGIN_SRC/setup.py" ]; then
+    NETWORK_PLUGIN_VERSION=$(sed -n 's/.*version="\([^"]*\)".*/\1/p' "$NETWORK_PLUGIN_SRC/setup.py" | head -n1)
+fi
+NETWORK_PLUGIN_INSTALLED=$("$VENV_DIR/bin/pip" show "$NETWORK_PLUGIN_NAME" 2>/dev/null | awk '/^Version:/{print $2}')
+if [ -d "$NETWORK_PLUGIN_SRC" ]; then
+    if [ -n "$NETWORK_PLUGIN_VERSION" ] && [ "$NETWORK_PLUGIN_INSTALLED" = "$NETWORK_PLUGIN_VERSION" ]; then
+        log "[+] Network Settings plugin $NETWORK_PLUGIN_VERSION already installed — skipping."
+    else
+        log "[*] Installing Network Settings plugin from $NETWORK_PLUGIN_SRC..."
+        run_quiet "$VENV_DIR/bin/pip" install --quiet "$NETWORK_PLUGIN_SRC" \
+            || { echo "ERROR: Failed to install Network Settings plugin."; exit 1; }
+        log "[+] Network Settings plugin installed."
+    fi
+else
+    log "[*] Network Settings plugin source not bundled — skipping."
+fi
+
 if [ ! -f "$DATA_DIR/config.yaml" ]; then
     log "[*] Installing default OctoPrint config..."
     cat > "$DATA_DIR/config.yaml" <<'YAML'
@@ -148,10 +169,14 @@ EOF
 chmod 755 /etc/init.d/octoprint
 run_quiet rc-update add octoprint default
 
-# ponytail: minimal sanity check - binary must be callable
+# ponytail: minimal sanity check - binary and bundled plugin must be callable when present
 "$VENV_DIR/bin/octoprint" --version >/dev/null \
-    && log "[+] Installation verified." \
     || { echo "[!] WARNING: octoprint binary check failed."; exit 1; }
+if [ -d "$NETWORK_PLUGIN_SRC" ]; then
+    "$VENV_DIR/bin/pip" show "$NETWORK_PLUGIN_NAME" >/dev/null \
+        || { echo "[!] WARNING: Network Settings plugin check failed."; exit 1; }
+fi
+log "[+] Installation verified."
 
 log "[+] Done! OctoPrint $LATEST installed."
 log "    Install : $INSTALL_DIR"

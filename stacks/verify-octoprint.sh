@@ -19,7 +19,7 @@ echo ""
 # ---- 1. Syntax checks ----------------------------------------
 echo "-- 1. Syntax checks --"
 
-for script in stacks/install-octoprint.sh; do
+for script in stacks/install-octoprint.sh stacks/install-nm-wrapper.sh; do
     if bash -n "$REPO/$script" 2>&1; then
         ok "bash -n $script"
     else
@@ -92,6 +92,20 @@ if grep -q 'if \[ ! -f.*config.yaml' "$REPO/stacks/install-octoprint.sh"; then
     ok "Installer preserves existing config.yaml on rerun (no user-config wipe)"
 else
     fail "Installer does not guard config.yaml write — may overwrite user config on rerun"
+fi
+
+if grep -q 'OctoPrint-NetworkSettings' "$REPO/stacks/install-octoprint.sh" \
+   && grep -q 'NETWORK_PLUGIN_SRC=/tmp/octoprint-network-settings' "$REPO/scripts/generate_alpine_rootfs.sh"; then
+    ok "Appliance install bundles and installs the Network Settings plugin"
+else
+    fail "Appliance install is missing bundled Network Settings plugin integration"
+fi
+
+if grep -q 'WRAPPER_SRC=/tmp/nm-wrapper' "$REPO/scripts/generate_alpine_rootfs.sh" \
+   && grep -q 'NOPASSWD: \$WRAPPER_DST status, \$WRAPPER_DST read' "$REPO/stacks/install-nm-wrapper.sh"; then
+    ok "Appliance install bundles nm-wrapper and grants OctoPrint wrapper-only sudo"
+else
+    fail "Appliance install is missing nm-wrapper sudo integration"
 fi
 
 # ---- 4. OctoPrint no-LTE DTB profile -------------------------

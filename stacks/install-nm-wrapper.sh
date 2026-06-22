@@ -4,7 +4,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-WRAPPER_SRC="$SCRIPT_DIR/../configs/nm-wrapper/nm-wrapper"
+WRAPPER_SRC="${WRAPPER_SRC:-$SCRIPT_DIR/../configs/nm-wrapper/nm-wrapper}"
 WRAPPER_DST="/usr/local/sbin/nm-wrapper"
 SUDOERS_FILE="/etc/sudoers.d/octoprint-nm"
 OCTOPRINT_USER="octoprint"
@@ -15,7 +15,7 @@ log() { echo "$@"; }
 [ -f "$WRAPPER_SRC" ]  || { echo "ERROR: wrapper source not found: $WRAPPER_SRC"; exit 1; }
 
 log "[*] Installing nm-wrapper to $WRAPPER_DST ..."
-install -Dm0755 "$WRAPPER_SRC" "$WRAPPER_DST"
+install -Dm0755 -o root -g root "$WRAPPER_SRC" "$WRAPPER_DST"
 log "[+] Installed $WRAPPER_DST"
 
 # Restrict octoprint user to exactly the two read-only wrapper subcommands.
@@ -26,6 +26,7 @@ cat > "$SUDOERS_FILE" <<SUDOERS
 # OctoPrint network plugin: NM wrapper access (read + DHCP/static config write + apply + backup/restore).
 $OCTOPRINT_USER ALL=(root) NOPASSWD: $WRAPPER_DST status, $WRAPPER_DST read, $WRAPPER_DST save-wifi-dhcp, $WRAPPER_DST save-wifi-static, $WRAPPER_DST apply-wifi, $WRAPPER_DST backup-wifi, $WRAPPER_DST restore-wifi
 SUDOERS
+chown root:root "$SUDOERS_FILE"
 chmod 0440 "$SUDOERS_FILE"
 log "[+] Wrote $SUDOERS_FILE"
 

@@ -84,7 +84,7 @@ if [ "$NEEDS_INSTALL" -eq 1 ]; then
 fi
 
 # Install Resource Monitor plugin (pinned release zip prepared by the image build)
-RM_INSTALLED=$("$VENV_DIR/bin/pip" show OctoPrint-Resource-Monitor 2>/dev/null | awk '/^Version:/{print $2}')
+RM_INSTALLED=$("$VENV_DIR/bin/pip" show OctoPrint-Resource-Monitor 2>/dev/null | awk '/^Version:/{print $2}' || true)
 # ponytail: idempotent - skip if exact pinned version already present
 if [ "$RM_INSTALLED" = "$RESOURCE_MONITOR_VERSION" ]; then
     log "[+] Resource Monitor $RESOURCE_MONITOR_VERSION already installed — skipping."
@@ -100,7 +100,7 @@ fi
 
 NETWORK_PLUGIN_VERSION=""
 [ -n "$NETWORK_PLUGIN_ZIP" ] && NETWORK_PLUGIN_VERSION=$(basename "$NETWORK_PLUGIN_ZIP" | sed -n 's/OctoPrint-NetworkSettings-\(.*\)\.zip/\1/p')
-NETWORK_PLUGIN_INSTALLED=$("$VENV_DIR/bin/pip" show "$NETWORK_PLUGIN_NAME" 2>/dev/null | awk '/^Version:/{print $2}')
+NETWORK_PLUGIN_INSTALLED=$("$VENV_DIR/bin/pip" show "$NETWORK_PLUGIN_NAME" 2>/dev/null | awk '/^Version:/{print $2}' || true)
 if [ -n "$NETWORK_PLUGIN_ZIP" ] && [ -f "$NETWORK_PLUGIN_ZIP" ]; then
     if [ -n "$NETWORK_PLUGIN_VERSION" ] && [ "$NETWORK_PLUGIN_INSTALLED" = "$NETWORK_PLUGIN_VERSION" ]; then
         log "[+] Network Settings plugin $NETWORK_PLUGIN_VERSION already installed — skipping."

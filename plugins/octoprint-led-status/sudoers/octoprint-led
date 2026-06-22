@@ -1,0 +1,5 @@
+# OctoPrint LED status helper — tightly scoped NOPASSWD rule.
+# Install to /etc/sudoers.d/octoprint-led (mode 0440).
+# Only the two known states are allowed; no wildcard.
+octoprint ALL=(root) NOPASSWD: /usr/local/sbin/led-helper idle
+octoprint ALL=(root) NOPASSWD: /usr/local/sbin/led-helper disconnected

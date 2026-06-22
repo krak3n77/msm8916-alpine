@@ -12,4 +12,8 @@ variables.env
 .kernel-dts/
 homer.yml
 pr_description.md
+*.prd.md
+HANDOFF.md
+issues/
 .vagrant
+kernel-build/

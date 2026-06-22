@@ -1,6 +1,19 @@
 #!/bin/bash
 set -euo pipefail
 
+# ponytail: load order: default profile → selected profile → local overrides
+[ -f ./profiles/default.env ] && source ./profiles/default.env
+
+if [ -n "${PROFILE:-}" ]; then
+    _PROFILE_FILE="./profiles/${PROFILE}.env"
+    if [ ! -f "$_PROFILE_FILE" ]; then
+        _AVAILABLE=$(ls ./profiles/*.env 2>/dev/null | xargs -n1 basename | sed 's/\.env$//' | grep -v '^default$' | tr '\n' ' ')
+        echo "ERROR: Unknown profile '${PROFILE}'. Available: ${_AVAILABLE:-none}"
+        exit 1
+    fi
+    source "$_PROFILE_FILE"
+fi
+
 [ -f ./variables.env ] && source ./variables.env
 
 # Configuration
@@ -18,6 +31,12 @@ PMOS_MIRROR="${PMOS_MIRROR:-http://mirror.postmarketos.org/postmarketos}"
 USERNAME="${USERNAME:-user}"
 DTB_FILE="${DTB_FILE:-msm8916-yiming-uz801v3.dtb}"
 USB0_IP="${USB0_IP:-192.168.42.1/24}"
+USB_GADGET_INSTALL="${USB_GADGET_INSTALL:-yes}"
+USB_GADGET_OTG="${USB_GADGET_OTG:-no}"
+USB_GADGET_ENABLED="${USB_GADGET_ENABLED:-yes}"
+OCTOPRINT_PREINSTALL="${OCTOPRINT_PREINSTALL:-no}"
+ZORAXY_PREINSTALL="${ZORAXY_PREINSTALL:-no}"
+DOCKER_ENABLE="${DOCKER_ENABLE:-no}"
 
 # Required: password must be set
 [ -z "${PASSWORD:-}" ] && {
@@ -38,6 +57,7 @@ if [ "$IS_ARM64" = "false" ]; then
     command -v qemu-aarch64-static >/dev/null || { echo "Falta qemu-aarch64-static"; exit 1; }
 fi
 
+echo "[*] Profile: ${PROFILE:-default}"
 echo "[*] Output directory: $OUT_DIR"
 echo "[*] Temporary staging: $STAGING"
 
@@ -114,9 +134,6 @@ echo ${USERNAME}:${PASSWORD}::::/home/${USERNAME}:/bin/bash | newusers
 printf 'PS1=\"\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]$ \"\n' > /home/${USERNAME}/.bash_profile
 chown ${USERNAME}:${USERNAME} /home/${USERNAME}/.bash_profile
 
-# Add user to docker group
-addgroup ${USERNAME} docker
-
 # Enable system services
 rc-update add devfs sysinit
 rc-update add dmesg sysinit
@@ -147,10 +164,14 @@ $(for svc in ${SERVICES_AUTOSTART:-}; do echo "rc-update add $svc default"; done
 # Sudo config
 echo "${USERNAME} ALL=(ALL:ALL) NOPASSWD: ALL" > "$CHROOT/etc/sudoers.d/${USERNAME}"
 
-# Docker configuration
-echo "[*] Configuring Docker..."
-mkdir -p "$CHROOT/etc/docker"
-cat > "$CHROOT/etc/docker/daemon.json" <<'DOCKEREOF'
+# Docker install + configuration (profile-driven)
+if [ "$DOCKER_ENABLE" = "yes" ]; then
+    echo "[*] Installing Docker..."
+    chroot "$CHROOT" ash -l -c "apk add --no-cache --no-interactive docker"
+    chroot "$CHROOT" ash -l -c "addgroup ${USERNAME} docker; rc-update add docker default"
+    echo "[*] Configuring Docker..."
+    mkdir -p "$CHROOT/etc/docker"
+    cat > "$CHROOT/etc/docker/daemon.json" <<'DOCKEREOF'
 {
   "log-driver": "json-file",
   "log-opts": {
@@ -161,6 +182,7 @@ cat > "$CHROOT/etc/docker/daemon.json" <<'DOCKEREOF'
   "iptables": true
 }
 DOCKEREOF
+fi
 
 # Chrony configuration
 echo "[*] Configuring Chrony..."
@@ -260,11 +282,21 @@ cat > "$CHROOT/etc/fstab" <<EOF
 EOF
 
 # USB gadget
-install -Dm0755 configs/usb-gadget/usb-gadget.sh "$CHROOT/usr/sbin/usb-gadget"
-install -Dm0755 configs/usb-gadget/usb-gadget.init "$CHROOT/etc/init.d/usb-gadget"
+if [ "$USB_GADGET_INSTALL" = "yes" ]; then
+    install -Dm0755 configs/usb-gadget/usb-gadget.sh "$CHROOT/usr/sbin/usb-gadget"
+    install -Dm0755 configs/usb-gadget/usb-gadget.init "$CHROOT/etc/init.d/usb-gadget"
+    cat > "$CHROOT/etc/usb-gadget.conf" << EOF
+# MSM8916 USB Gadget Configuration
 
-# Enable USB gadget service
-chroot "$CHROOT" ash -l -c "rc-update add usb-gadget default" || true
+USE_NCM=1           # 1 = NCM (Linux/Mac), 0 = RNDIS (Windows)
+ENABLE_OTG=$([ "$USB_GADGET_OTG" = "yes" ] && echo 1 || echo 0)        # 1 = OTG Host mode, 0 = Gadget mode
+EOF
+
+    # Enable USB gadget service (controlled by USB_GADGET_ENABLED profile setting)
+    if [ "$USB_GADGET_ENABLED" = "yes" ]; then
+        chroot "$CHROOT" ash -l -c "rc-update add usb-gadget default" || true
+    fi
+fi
 
 # Expand rootfs on first boot
 install -Dm0755 configs/expand-rootfs/expand-rootfs.sh "$CHROOT/usr/sbin/expand-rootfs.sh"
@@ -285,14 +317,64 @@ swapon /dev/zram0
 EOF
 chmod +x "$CHROOT/etc/local.d/zram.start"
 
-# Copy install scripts to user home for first boot
-for script in stacks/install-*.sh; do
-    [ -f "$script" ] || continue
-    name="$(basename "$script")"
-    echo "[*] Copying $name..."
-    cp "$script" "$CHROOT/home/${USERNAME}/$name"
-    chroot "$CHROOT" ash -l -c "chmod +x /home/${USERNAME}/$name && chown ${USERNAME}:${USERNAME} /home/${USERNAME}/$name"
+# Optional OctoPrint appliance preinstall
+if [ "$OCTOPRINT_PREINSTALL" = "yes" ]; then
+    # --- USB serial modules (issue-005) ---
+    KERNEL_VER="6.12.1-msm8916"
+    USB_MOD_SRC="$(pwd)/modules/octoprint-usb-serial/${KERNEL_VER}"
+    USB_REQUIRED_MODS="ch341.ko usbserial.ko cdc-acm.ko"
+
+    # Fail clearly if required modules are missing
+    _missing=""
+    for _mod in $USB_REQUIRED_MODS; do
+        [ -f "$USB_MOD_SRC/$_mod" ] || _missing="$_missing $_mod"
+    done
+    if [ -n "$_missing" ]; then
+        echo "ERROR: Missing required USB serial modules for OctoPrint:${_missing}"
+        echo "       Expected in:       $USB_MOD_SRC/"
+        exit 1
+    fi
+
+    # Copy modules into rootfs under correct kernel/drivers subdirs
+    echo "[*] Installing USB serial modules (${KERNEL_VER})..."
+    USB_MOD_SERIAL="$CHROOT/lib/modules/${KERNEL_VER}/kernel/drivers/usb/serial"
+    USB_MOD_CLASS="$CHROOT/lib/modules/${KERNEL_VER}/kernel/drivers/usb/class"
+    mkdir -p "$USB_MOD_SERIAL" "$USB_MOD_CLASS"
+    for _mod in usbserial.ko ch341.ko ftdi_sio.ko pl2303.ko; do
+        [ -f "$USB_MOD_SRC/$_mod" ] && install -m0644 "$USB_MOD_SRC/$_mod" "$USB_MOD_SERIAL/"
+    done
+    [ -f "$USB_MOD_SRC/cdc-acm.ko" ] && install -m0644 "$USB_MOD_SRC/cdc-acm.ko" "$USB_MOD_CLASS/"
+
+    # Build module index so modprobe ch341 works on first boot
+    chroot "$CHROOT" depmod -a "${KERNEL_VER}"
+
+    # Force USB host mode and preload printer serial drivers at boot.
+    cat > "$CHROOT/etc/local.d/octoprint-usb.start" << 'EOF'
+#!/bin/sh
+ROLE=/sys/class/usb_role/ci_hdrc.0-role-switch/role
+for _ in 1 2 3 4 5; do
+    [ -w "$ROLE" ] && { echo host > "$ROLE"; break; }
+    sleep 1
 done
+modprobe usbserial 2>/dev/null || true
+modprobe ch341 2>/dev/null || true
+modprobe cdc_acm 2>/dev/null || true
+EOF
+    chmod +x "$CHROOT/etc/local.d/octoprint-usb.start"
+
+    echo "[*] Preinstalling OctoPrint..."
+    install -Dm0755 stacks/install-octoprint.sh "$CHROOT/tmp/install-octoprint.sh"
+    chroot "$CHROOT" bash /tmp/install-octoprint.sh -y
+    rm -f "$CHROOT/tmp/install-octoprint.sh"
+fi
+
+# Optional Zoraxy appliance preinstall
+if [ "$ZORAXY_PREINSTALL" = "yes" ]; then
+    echo "[*] Preinstalling Zoraxy..."
+    install -Dm0755 stacks/install-zoraxy.sh "$CHROOT/tmp/install-zoraxy.sh"
+    chroot "$CHROOT" bash /tmp/install-zoraxy.sh
+    rm -f "$CHROOT/tmp/install-zoraxy.sh"
+fi
 
 # Create tarball
 echo "[*] Creating tarball..."
@@ -312,11 +394,12 @@ tar -C "$CHROOT" \
 
 cp "$STAGING/alpine_rootfs.tgz" "$OUT_DIR/rootfs.tgz"
 
-echo "[+] OK: Alpine rootfs ready in $OUT_DIR"
+echo "[+] OK: Alpine rootfs ready in $OUT_DIR (profile: ${PROFILE:-default})"
 echo "    - Kernel: linux-postmarketos-qcom-msm8916 from ${PMOS_RELEASE}"
-echo "    - Docker: enabled and configured"
+echo "    - Docker: ${DOCKER_ENABLE}"
+echo "    - OctoPrint preinstalled: ${OCTOPRINT_PREINSTALL}"
+echo "    - Zoraxy preinstalled: ${ZORAXY_PREINSTALL}"
 echo "    - Chrony: enabled with NTP servers"
-echo "    - User '${USERNAME}' in docker group"
 echo "    - DTB: ${DTB_FILE}"
 echo "    - $OUT_DIR/rootfs/ (directory)"
 echo "    - $OUT_DIR/rootfs.tgz (tarball)"

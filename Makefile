@@ -1,7 +1,28 @@
+.PHONY: builder build-vm build-all-vm fetch dts _check-env clean build build-all \
+        octoprint docker zoraxy verify-octoprint \
+        kernel-env-check modules kernel-env kernel-modules
+
+# ponytail: pass PROFILE=<name> on the make command line, e.g. make build PROFILE=octoprint
+export PROFILE ?=
+
 builder:
 	vagrant up
 	vagrant rsync
 	vagrant ssh -c "cd /app && sudo bash"
+	@echo "[msm8916] Tip: run 'make fetch' on the host to copy build artifacts to files/."
+
+# Non-interactive build from the host; fetch artifacts via SSH after the build.
+build-vm:
+	vagrant up
+	vagrant rsync
+	vagrant ssh -c "cd /app && sudo make build PROFILE=$(PROFILE)"
+	$(MAKE) fetch
+
+build-all-vm:
+	vagrant up
+	vagrant rsync
+	vagrant ssh -c "cd /app && sudo make build-all PROFILE=$(PROFILE)"
+	$(MAKE) fetch
 
 fetch:
 	@mkdir -p files
@@ -28,3 +49,28 @@ build: _check-env
 build-all: build
 	./scripts/generate_firmware.sh files/firmware.zip
 	./scripts/generate_gpt_table.sh files/gpt_both0.bin
+
+# ponytail: static aliases — add new profile here when profiles/*.env grows
+octoprint: _check-env
+	$(MAKE) build-all PROFILE=octoprint
+
+docker: _check-env
+	$(MAKE) build-all PROFILE=docker
+
+zoraxy: _check-env
+	$(MAKE) build-all PROFILE=zoraxy
+
+verify-octoprint:
+	./stacks/verify-octoprint.sh
+
+# USB serial modules for OctoPrint
+kernel-env-check:
+	bash scripts/validate-kernel-env.sh
+
+modules: _check-env
+	bash scripts/make_modules.sh
+
+kernel-env: _check-env
+	bash scripts/setup-kernel-build.sh
+
+kernel-modules: modules

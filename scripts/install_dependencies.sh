@@ -29,6 +29,9 @@ unzip
 wget
 "
 
+# Kernel build deps (modules_prepare for out-of-tree modules against 6.12.1-msm8916)
+PACKAGES="$PACKAGES bc flex bison libelf-dev libssl-dev"
+
 if [ "$ARCH" = "amd64" ]; then
     # Cross-compilers and QEMU for amd64 host targeting aarch64
     PACKAGES="$PACKAGES g++-aarch64-linux-gnu gcc-aarch64-linux-gnu qemu-user-static"

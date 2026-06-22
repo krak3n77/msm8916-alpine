@@ -17,3 +17,6 @@ HANDOFF.md
 issues/
 .vagrant
 kernel-build/
+
+__pycache__/
+*.py[cod]

@@ -1,0 +1,99 @@
+<!-- OctoPrint-NetworkSettings: settings panel -->
+<div id="settings_plugin_network_settings">
+
+  <h3>WiFi Status</h3>
+  <dl class="dl-horizontal">
+    <dt>State</dt>
+    <dd>
+      <span data-bind="text: state,
+                       css: {'text-success': state() === 'connected',
+                             'text-error':   state() !== 'connected'}"></span>
+    </dd>
+    <dt>Active SSID</dt>
+    <dd data-bind="text: activeConnection() || '—'"></dd>
+    <dt>IPv4 Address</dt>
+    <dd data-bind="text: address() || '—'"></dd>
+    <dt>Gateway</dt>
+    <dd data-bind="text: gateway() || '—'"></dd>
+    <dt>DNS</dt>
+    <dd data-bind="text: dns() || '—'"></dd>
+    <dt>Mode</dt>
+    <dd data-bind="text: mode() === 'manual' ? 'Static' : 'DHCP'"></dd>
+  </dl>
+
+  <hr/>
+  <h3>WiFi Credentials</h3>
+
+  <div class="control-group">
+    <label class="control-label">SSID</label>
+    <div class="controls">
+      <input type="text" class="input-block-level" data-bind="value: ssid"
+             placeholder="Network name">
+    </div>
+  </div>
+  <div class="control-group">
+    <label class="control-label">Password</label>
+    <div class="controls">
+      <input type="password" class="input-block-level" data-bind="value: password"
+             placeholder="Required (current password is never shown)">
+      <span class="help-block">8–63 characters, or 64-char hex PSK.</span>
+    </div>
+  </div>
+
+  <hr/>
+  <h3>IPv4 Settings</h3>
+
+  <div class="control-group">
+    <label class="control-label">Mode</label>
+    <div class="controls">
+      <label class="radio inline">
+        <input type="radio" name="ns_ipv4_mode" value="auto" data-bind="checked: mode"> DHCP
+      </label>
+      <label class="radio inline" style="margin-left:1em;">
+        <input type="radio" name="ns_ipv4_mode" value="manual" data-bind="checked: mode"> Static
+      </label>
+    </div>
+  </div>
+
+  <!-- static fields — only visible in manual mode -->
+  <div data-bind="visible: isStatic">
+    <div class="control-group">
+      <label class="control-label">Address / CIDR</label>
+      <div class="controls">
+        <input type="text" class="input-block-level" data-bind="value: address"
+               placeholder="e.g. 192.168.1.100/24">
+      </div>
+    </div>
+    <div class="control-group">
+      <label class="control-label">Gateway</label>
+      <div class="controls">
+        <input type="text" class="input-block-level" data-bind="value: gateway"
+               placeholder="e.g. 192.168.1.1">
+      </div>
+    </div>
+    <div class="control-group">
+      <label class="control-label">DNS</label>
+      <div class="controls">
+        <input type="text" class="input-block-level" data-bind="value: dns"
+               placeholder="e.g. 8.8.8.8 or 8.8.8.8,8.8.4.4">
+      </div>
+    </div>
+  </div>
+
+  <!-- feedback -->
+  <div data-bind="visible: message().length > 0" style="margin-top:0.5em;">
+    <p data-bind="text: message, css: {'text-error': messageIsError, 'text-success': !messageIsError()}"></p>
+  </div>
+
+  <div class="form-actions">
+    <button class="btn btn-primary" data-bind="click: save, disable: saving">
+      <i data-bind="css: {'icon-spinner icon-spin': saving}"></i>
+      <span data-bind="text: saving() ? 'Saving…' : 'Save'"></span>
+    </button>
+    <button class="btn" data-bind="click: load">Refresh</button>
+    <span class="help-inline muted">
+      Save writes the profile but does not reconnect (changes take effect on next apply).
+    </span>
+  </div>
+
+</div>

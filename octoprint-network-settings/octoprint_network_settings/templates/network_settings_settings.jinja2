@@ -81,18 +81,30 @@
   </div>
 
   <!-- feedback -->
+  <div class="alert alert-warning" style="margin-top:1em;">
+    Save only writes the profile. Save &amp; Restart Network reconnects WiFi and may temporarily disconnect OctoPrint while wlan0 comes back.
+  </div>
+
   <div data-bind="visible: message().length > 0" style="margin-top:0.5em;">
     <p data-bind="text: message, css: {'text-error': messageIsError, 'text-success': !messageIsError()}"></p>
   </div>
 
   <div class="form-actions">
-    <button class="btn btn-primary" data-bind="click: save, disable: saving">
+    <button class="btn btn-primary" data-bind="click: save, disable: saving() || applying() || restoring()">
       <i data-bind="css: {'icon-spinner icon-spin': saving}"></i>
       <span data-bind="text: saving() ? 'Saving…' : 'Save'"></span>
     </button>
-    <button class="btn" data-bind="click: load">Refresh</button>
+    <button class="btn btn-warning" data-bind="click: apply, disable: saving() || applying() || restoring()">
+      <i data-bind="css: {'icon-spinner icon-spin': applying}"></i>
+      <span data-bind="text: applying() ? 'Saving & restarting…' : 'Save & Restart Network'"></span>
+    </button>
+    <button class="btn btn-danger" data-bind="click: restore, disable: saving() || applying() || restoring()">
+      <i data-bind="css: {'icon-spinner icon-spin': restoring}"></i>
+      <span data-bind="text: restoring() ? 'Restoring…' : 'Revert to Last Backup'"></span>
+    </button>
+    <button class="btn" data-bind="click: load, disable: saving() || applying() || restoring()">Refresh</button>
     <span class="help-inline muted">
-      Save writes the profile but does not reconnect (changes take effect on next apply).
+      Restore uses the most recent backup only. Neither action restarts OctoPrint.
     </span>
   </div>
 

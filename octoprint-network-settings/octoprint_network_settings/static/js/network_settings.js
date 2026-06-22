@@ -11,6 +11,8 @@ $(function () {
         self.gateway = ko.observable("");
         self.dns = ko.observable("");
         self.saving = ko.observable(false);
+        self.applying = ko.observable(false);
+        self.restoring = ko.observable(false);
         self.message = ko.observable("");
         self.messageIsError = ko.observable(false);
 
@@ -47,6 +49,17 @@ $(function () {
                 });
         };
 
+        self.payload = function () {
+            return {
+                ssid: self.ssid(),
+                password: self.password(),
+                mode: self.mode(),
+                address: self.address(),
+                gateway: self.gateway(),
+                dns: self.dns()
+            };
+        };
+
         self.save = function () {
             self.saving(true);
             self.setMessage("", false);
@@ -56,25 +69,63 @@ $(function () {
                 type: "POST",
                 contentType: "application/json; charset=UTF-8",
                 dataType: "json",
-                data: JSON.stringify({
-                    ssid: self.ssid(),
-                    password: self.password(),
-                    mode: self.mode(),
-                    address: self.address(),
-                    gateway: self.gateway(),
-                    dns: self.dns()
-                })
+                data: JSON.stringify(self.payload())
             })
                 .done(function () {
-                    self.setMessage("Saved. Changes are staged; apply UI comes later.", false);
+                    self.setMessage("Saved. Changes are staged; network stays up until you restart WiFi.", false);
                     self.load(true);
                 })
                 .fail(function (xhr) {
                     var data = xhr.responseJSON || {};
-                    self.setMessage(data.error || "Save failed", true);
+                    self.setMessage("Save failed: " + (data.error || "unknown error"), true);
                 })
                 .always(function () {
                     self.saving(false);
+                });
+        };
+
+        self.apply = function () {
+            self.applying(true);
+            self.setMessage("", false);
+
+            $.ajax({
+                url: API_BASEURL + "plugin/network_settings/apply",
+                type: "POST",
+                contentType: "application/json; charset=UTF-8",
+                dataType: "json",
+                data: JSON.stringify(self.payload())
+            })
+                .done(function () {
+                    self.setMessage("Saved and restarted WiFi. OctoPrint may disconnect temporarily while wlan0 reconnects.", false);
+                })
+                .fail(function (xhr) {
+                    var data = xhr.responseJSON || {};
+                    self.setMessage("Save & Restart Network failed: " + (data.error || "unknown error"), true);
+                })
+                .always(function () {
+                    self.applying(false);
+                });
+        };
+
+        self.restore = function () {
+            self.restoring(true);
+            self.setMessage("", false);
+
+            $.ajax({
+                url: API_BASEURL + "plugin/network_settings/restore",
+                type: "POST",
+                contentType: "application/json; charset=UTF-8",
+                dataType: "json"
+            })
+                .done(function () {
+                    self.setMessage("Restored the most recent backup. OctoPrint may disconnect temporarily while wlan0 reconnects.", false);
+                })
+                .fail(function (xhr) {
+                    var data = xhr.responseJSON || {};
+                    self.setMessage("Restore failed: " + (data.error || "unknown error"), true);
+                })
+                .always(function () {
+                    self.restoring(false);
                 });
         };
 

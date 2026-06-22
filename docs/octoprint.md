@@ -34,6 +34,11 @@ plugins (OctoPrint-Dashboard, timelapse, etc.) on this device.
 ## Interesting plugins
 
 - **Resource Monitor** — preinstalled (v0.4.0). Watches RAM, CPU, disk, and network — essential on this low-RAM device.
+- **Network Settings** — appliance WiFi editor for `wlan0`.
+  - **Save** writes the NetworkManager profile only.
+  - **Save & Restart Network** backs up the current WiFi config, saves the form, then reconnects `wlan0`.
+  - **Revert to Last Backup** restores the most recent WiFi backup and reconnects `wlan0`.
+  - **Neither action restarts OctoPrint.** Expect the web UI to disconnect briefly while WiFi reconnects.
 - **OctoPrint-RTSP** — for camera monitoring via RTSP (install manually from OctoPrint's Plugin Manager):
   ```text
   https://github.com/soopahfly/OctoPrint-RTSP/archive/v1.0.3.zip
@@ -232,6 +237,16 @@ rc-update del octoprint default
 rm -rf /opt/octoprint /var/lib/octoprint /var/log/octoprint /etc/init.d/octoprint
 deluser octoprint
 ```
+
+## Manual verification status
+
+The Save & Restart Network / Revert flows have smoke coverage in the plugin repo, but **still need HITL verification on a real MSM8916 appliance**. Run this before calling the feature done:
+
+1. Open OctoPrint → Settings → Network Settings.
+2. Save a known-good WiFi config.
+3. Use **Save & Restart Network** and confirm `wlan0` reconnects with the new config.
+4. Use **Revert to Last Backup** and confirm the previous config comes back.
+5. Confirm OctoPrint itself was not restarted; only the browser session should drop/reconnect.
 
 ## Troubleshooting
 

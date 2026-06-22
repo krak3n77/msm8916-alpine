@@ -13,6 +13,7 @@ variables.env
 homer.yml
 pr_description.md
 *.prd.md
+HANDOFF.md
 issues/
 .vagrant
 kernel-build/

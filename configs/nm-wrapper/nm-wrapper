@@ -12,12 +12,19 @@
 #                          (validates SSID/password/CIDR/gateway/DNS, writes static profile, does NOT activate)
 #   apply-wifi         →  {"ok":true,"interface":"wlan0","connection":"MySSID"}
 #                          (reloads NM config from disk, then reconnects wlan0 — does NOT touch OctoPrint)
+#   backup-wifi        →  {"ok":true,"backup":"/var/lib/nm-wrapper/wifi-backups/MySSID-20240101T120000.nmconnection"}
+#                          (snapshots current wlan0 .nmconnection file, mode 0600)
+#   restore-wifi       →  {"ok":true,"restored":"...","interface":"wlan0","connection":"MySSID"}
+#                          (restores most recent backup, reloads NM, reconnects wlan0)
 #
 # All output to stdout is valid JSON. Exit 0 on success, 1 on error.
 # ponytail: no JSON escaping for values — SSIDs and IPs rarely contain quotes/backslashes.
 set -eu
 
 IFACE="wlan0"
+# ponytail: env-overridable paths so nm-wrapper.check can use temp dirs for stub tests.
+NM_CONN_DIR="${NM_CONN_DIR:-/etc/NetworkManager/system-connections}"
+BACKUP_DIR="${BACKUP_DIR:-/var/lib/nm-wrapper/wifi-backups}"
 
 # Print JSON error to stdout and exit 1 (caller checks exit code).
 die() { printf '{"error":"%s"}\n' "$*"; exit 1; }
@@ -224,8 +231,53 @@ apply-wifi)
     printf '{"ok":true,"interface":"%s","connection":"%s"}\n' "$IFACE" "$CONN"
     ;;
 
+backup-wifi)
+    # Snapshot the current wlan0 .nmconnection file before a risky change.
+    # Find the active or configured connection name for this interface.
+    CONN=$(nmcli -g GENERAL.CONNECTION device show "$IFACE" 2>/dev/null | head -1) || CONN=""
+    [ "$CONN" = "--" ] && CONN=""
+    if [ -z "$CONN" ]; then
+        CONN=$(nmcli -g NAME,DEVICE connection show 2>/dev/null \
+            | grep ":${IFACE}$" | cut -d: -f1 | head -1) || CONN=""
+    fi
+    [ -z "$CONN" ] && die "no connection profile found for $IFACE"
+
+    CONN_FILE="$NM_CONN_DIR/${CONN}.nmconnection"
+    [ -f "$CONN_FILE" ] || die "connection file not found: $CONN_FILE"
+
+    mkdir -p "$BACKUP_DIR"
+    chmod 0700 "$BACKUP_DIR"
+    TS=$(date +%Y%m%dT%H%M%S)
+    BFILE="$BACKUP_DIR/${CONN}-${TS}.nmconnection"
+    cp "$CONN_FILE" "$BFILE"
+    chmod 0600 "$BFILE"
+    printf '{"ok":true,"backup":"%s"}\n' "$BFILE"
+    ;;
+
+restore-wifi)
+    # Restore the most recent backup and reconnect wlan0 via NetworkManager.
+    [ -d "$BACKUP_DIR" ] || die "no backups: $BACKUP_DIR not found"
+    BFILE=$(ls -t "$BACKUP_DIR/"*.nmconnection 2>/dev/null | head -1) || true
+    [ -z "$BFILE" ] && die "no backup found in $BACKUP_DIR"
+    [ -f "$BFILE" ]  || die "backup file vanished: $BFILE"
+
+    # Derive connection name by stripping the -YYYYMMDDTHHMMSS suffix.
+    BNAME=$(basename "$BFILE" .nmconnection)
+    CONN="${BNAME%-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]T[0-9][0-9][0-9][0-9][0-9][0-9]}"
+    [ -z "$CONN" ] || [ "$CONN" = "$BNAME" ] && die "cannot parse connection name from: $BNAME"
+
+    CONN_FILE="$NM_CONN_DIR/${CONN}.nmconnection"
+    cp "$BFILE" "$CONN_FILE"
+    chmod 0600 "$CONN_FILE"
+
+    nmcli connection reload 2>/dev/null || die "nmcli connection reload failed"
+    nmcli connection up "$CONN"  2>/dev/null || die "nmcli connection up failed"
+    printf '{"ok":true,"restored":"%s","interface":"%s","connection":"%s"}\n' \
+        "$(basename "$BFILE")" "$IFACE" "$CONN"
+    ;;
+
 *)
-    printf 'Usage: %s {status|read|save-wifi-dhcp|save-wifi-static|apply-wifi}\n' "$(basename "$0")" >&2
+    printf 'Usage: %s {status|read|save-wifi-dhcp|save-wifi-static|apply-wifi|backup-wifi|restore-wifi}\n' "$(basename "$0")" >&2
     exit 1
     ;;
 esac

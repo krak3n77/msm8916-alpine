@@ -223,6 +223,117 @@ STUB
     echo "$OUT" | grep -q '"ok":true'              && ok "apply-wifi.ok=true"           || fail "apply-wifi.ok wrong: $OUT"
     echo "$OUT" | grep -q '"interface":"wlan0"'    && ok "apply-wifi.interface=wlan0"   || fail "apply-wifi.interface wrong: $OUT"
     echo "$OUT" | grep -q '"connection":"'          && ok "apply-wifi.connection present" || fail "apply-wifi.connection wrong: $OUT"
+
+    # ── backup-wifi stub checks ─────────────────────────────────────────────
+    echo ""
+    echo "  [backup-wifi stub checks]"
+
+    # Temp dirs for NM_CONN_DIR and BACKUP_DIR so we don't touch real system paths.
+    TMPNM=$(mktemp -d)
+    TMPBK=$(mktemp -d)
+    trap 'rm -rf "$TMPCK" "$TMPNM" "$TMPBK"' EXIT
+
+    # Stub nmcli returns "TestSSID" as the connection; seed the NM_CONN_DIR.
+    printf '[connection]\nid=TestSSID\n[wifi-security]\npsk=secret\n' \
+        > "$TMPNM/TestSSID.nmconnection"
+    chmod 0600 "$TMPNM/TestSSID.nmconnection"
+
+    # Valid backup → ok:true, backup path in output.
+    RC=0; OUT=$(NM_CONN_DIR="$TMPNM" BACKUP_DIR="$TMPBK" PATH="$TMPCK:$PATH" \
+        "$WRAPPER" backup-wifi 2>/dev/null) || RC=$?
+    [ $RC -eq 0 ] && ok "backup-wifi exits 0 (stub)" || fail "backup-wifi exited $RC (stub)"
+    check_json "$OUT" "backup-wifi returns JSON (stub)"
+    echo "$OUT" | grep -q '"ok":true'   && ok "backup-wifi.ok=true"       || fail "backup-wifi.ok wrong: $OUT"
+    echo "$OUT" | grep -q '"backup":"'  && ok "backup-wifi.backup present" || fail "backup-wifi.backup missing: $OUT"
+
+    # Backup file must exist and be mode 0600 (no group/other read — secrets safe).
+    BFILE=$(ls "$TMPBK/"*.nmconnection 2>/dev/null | head -1) || BFILE=""
+    [ -n "$BFILE" ] && ok "backup file created" || fail "backup file not found in $TMPBK"
+    if [ -n "$BFILE" ]; then
+        # ponytail: cut to 10 chars — macOS ls appends @ for xattrs, Linux does not.
+        PERMS=$(ls -l "$BFILE" | awk '{print $1}' | cut -c1-10)
+        [ "$PERMS" = "-rw-------" ] && ok "backup file is mode 0600" \
+            || fail "backup file permissions wrong: $PERMS (want -rw-------)"
+    fi
+
+    # No connection profile available → error JSON + non-zero exit.
+    cat > "$TMPCK/nmcli" <<'STUB2'
+#!/bin/sh
+case "$*" in
+    *GENERAL.CONNECTION*device*show*) echo "--" ;;
+    *NAME,DEVICE*connection*show*)   echo "" ;;
+    *) echo "stub2: unhandled: $*" >&2; exit 1 ;;
+esac
+STUB2
+    chmod +x "$TMPCK/nmcli"
+    RC=0; OUT=$(NM_CONN_DIR="$TMPNM" BACKUP_DIR="$TMPBK" PATH="$TMPCK:$PATH" \
+        "$WRAPPER" backup-wifi 2>/dev/null) || RC=$?
+    [ $RC -ne 0 ] && ok "backup-wifi no-conn exits non-zero" \
+        || fail "backup-wifi no-conn should exit non-zero"
+    echo "$OUT" | grep -q '"error"' && ok "backup-wifi no-conn returns error JSON" \
+        || fail "backup-wifi no-conn missing error key: $OUT"
+
+    # Restore stub nmcli to standard stub.
+    cat > "$TMPCK/nmcli" <<'STUB'
+#!/bin/sh
+case "$*" in
+    *DEVICE,STATE*)                          echo "wlan0:connected"; echo "lo:unmanaged" ;;
+    *GENERAL.CONNECTION*device*show*wlan0*)  echo "TestSSID" ;;
+    *802-11-wireless.ssid*connection*show*)  echo "TestSSID" ;;
+    *ipv4.method*connection*show*)           echo "auto" ;;
+    *IP4.ADDRESS*device*show*wlan0*)         echo "192.168.1.100/24" ;;
+    *IP4.GATEWAY*device*show*wlan0*)         echo "192.168.1.1" ;;
+    *IP4.DNS*device*show*wlan0*)             printf "8.8.8.8\n8.8.4.4\n" ;;
+    *NAME,DEVICE*connection*show*)           echo "TestSSID:wlan0" ;;
+    *connection*reload*)                     exit 0 ;;
+    *connection*up*)                         exit 0 ;;
+    *connection*modify*)                     exit 0 ;;
+    *connection*add*)                        exit 0 ;;
+    *)                                       echo "stub: unhandled args: $*" >&2; exit 1 ;;
+esac
+STUB
+    chmod +x "$TMPCK/nmcli"
+
+    # ── restore-wifi stub checks ─────────────────────────────────────────────
+    echo ""
+    echo "  [restore-wifi stub checks]"
+
+    # Valid restore (uses the backup created above) → ok:true.
+    RC=0; OUT=$(NM_CONN_DIR="$TMPNM" BACKUP_DIR="$TMPBK" PATH="$TMPCK:$PATH" \
+        "$WRAPPER" restore-wifi 2>/dev/null) || RC=$?
+    [ $RC -eq 0 ] && ok "restore-wifi exits 0 (stub)" || fail "restore-wifi exited $RC (stub)"
+    check_json "$OUT" "restore-wifi returns JSON (stub)"
+    echo "$OUT" | grep -q '"ok":true'           && ok "restore-wifi.ok=true"           || fail "restore-wifi.ok wrong: $OUT"
+    echo "$OUT" | grep -q '"restored":"'         && ok "restore-wifi.restored present"  || fail "restore-wifi.restored missing: $OUT"
+    echo "$OUT" | grep -q '"interface":"wlan0"'  && ok "restore-wifi.interface=wlan0"  || fail "restore-wifi.interface wrong: $OUT"
+    echo "$OUT" | grep -q '"connection":"'        && ok "restore-wifi.connection present" || fail "restore-wifi.connection missing: $OUT"
+
+    # Restored connection file must be mode 0600.
+    if [ -f "$TMPNM/TestSSID.nmconnection" ]; then
+        # ponytail: cut to 10 chars — macOS ls appends @ for xattrs, Linux does not.
+        PERMS=$(ls -l "$TMPNM/TestSSID.nmconnection" | awk '{print $1}' | cut -c1-10)
+        [ "$PERMS" = "-rw-------" ] && ok "restored file is mode 0600" \
+            || fail "restored file permissions wrong: $PERMS (want -rw-------)"
+    fi
+
+    # No backup dir → error JSON + non-zero exit.
+    TMPBK2=$(mktemp -d) && rm -rf "$TMPBK2"  # ensure it does not exist
+    RC=0; OUT=$(NM_CONN_DIR="$TMPNM" BACKUP_DIR="$TMPBK2" PATH="$TMPCK:$PATH" \
+        "$WRAPPER" restore-wifi 2>/dev/null) || RC=$?
+    [ $RC -ne 0 ] && ok "restore-wifi no-dir exits non-zero" \
+        || fail "restore-wifi no-dir should exit non-zero"
+    echo "$OUT" | grep -q '"error"' && ok "restore-wifi no-dir returns error JSON" \
+        || fail "restore-wifi no-dir missing error key: $OUT"
+
+    # Empty backup dir → error JSON + non-zero exit.
+    TMPBK3=$(mktemp -d)
+    RC=0; OUT=$(NM_CONN_DIR="$TMPNM" BACKUP_DIR="$TMPBK3" PATH="$TMPCK:$PATH" \
+        "$WRAPPER" restore-wifi 2>/dev/null) || RC=$?
+    [ $RC -ne 0 ] && ok "restore-wifi empty-dir exits non-zero" \
+        || fail "restore-wifi empty-dir should exit non-zero"
+    echo "$OUT" | grep -q '"error"' && ok "restore-wifi empty-dir returns error JSON" \
+        || fail "restore-wifi empty-dir missing error key: $OUT"
+    rm -rf "$TMPBK3"
 fi
 
 echo ""

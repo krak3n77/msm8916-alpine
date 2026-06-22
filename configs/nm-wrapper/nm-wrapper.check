@@ -76,6 +76,8 @@ case "$*" in
     *IP4.GATEWAY*device*show*wlan0*)         echo "192.168.1.1" ;;
     *IP4.DNS*device*show*wlan0*)             printf "8.8.8.8\n8.8.4.4\n" ;;
     *NAME,DEVICE*connection*show*)           echo "wlan0:wlan0" ;;
+    *connection*reload*)                     exit 0 ;;
+    *connection*up*)                         exit 0 ;;
     *connection*modify*)                     exit 0 ;;
     *connection*add*)                        exit 0 ;;
     *)                                       echo "stub: unhandled args: $*" >&2; exit 1 ;;
@@ -209,6 +211,18 @@ STUB
     RC=0; OUT=$(PATH="$TMPCK:$PATH" "$WRAPPER" save-wifi-static \
         "MyNetwork" "password123" "192.168.1.100/24" "192.168.1.1" "" 2>/dev/null) || RC=$?
     [ $RC -ne 0 ] && ok "save-wifi-static empty DNS exits non-zero" || fail "save-wifi-static empty DNS should exit non-zero"
+
+    # ── apply-wifi stub checks ──────────────────────────────────────────────
+    echo ""
+    echo "  [apply-wifi stub checks]"
+
+    # Valid → ok:true, interface=wlan0, connection present
+    RC=0; OUT=$(PATH="$TMPCK:$PATH" "$WRAPPER" apply-wifi 2>/dev/null) || RC=$?
+    [ $RC -eq 0 ] && ok "apply-wifi exits 0 (stub)" || fail "apply-wifi exited $RC (stub)"
+    check_json "$OUT" "apply-wifi returns JSON (stub)"
+    echo "$OUT" | grep -q '"ok":true'              && ok "apply-wifi.ok=true"           || fail "apply-wifi.ok wrong: $OUT"
+    echo "$OUT" | grep -q '"interface":"wlan0"'    && ok "apply-wifi.interface=wlan0"   || fail "apply-wifi.interface wrong: $OUT"
+    echo "$OUT" | grep -q '"connection":"'          && ok "apply-wifi.connection present" || fail "apply-wifi.connection wrong: $OUT"
 fi
 
 echo ""

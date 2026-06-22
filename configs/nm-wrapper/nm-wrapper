@@ -10,6 +10,8 @@
 #                          (validates SSID/password, writes NM DHCP profile, does NOT activate)
 #   save-wifi-static   →  {"ok":true,"ssid":"MySSID","ipv4_method":"manual"}
 #                          (validates SSID/password/CIDR/gateway/DNS, writes static profile, does NOT activate)
+#   apply-wifi         →  {"ok":true,"interface":"wlan0","connection":"MySSID"}
+#                          (reloads NM config from disk, then reconnects wlan0 — does NOT touch OctoPrint)
 #
 # All output to stdout is valid JSON. Exit 0 on success, 1 on error.
 # ponytail: no JSON escaping for values — SSIDs and IPs rarely contain quotes/backslashes.
@@ -203,8 +205,27 @@ save-wifi-static)
     printf '{"ok":true,"ssid":"%s","ipv4_method":"manual"}\n' "$SSID"
     ;;
 
+apply-wifi)
+    # Reload NM connection files from disk, then bring up the wlan0 profile.
+    # Does NOT restart OctoPrint or touch any other interface/service.
+    nmcli connection reload 2>/dev/null || die "nmcli connection reload failed"
+
+    # Find connection profile for this interface (active first, then any by interface).
+    CONN=$(nmcli -g GENERAL.CONNECTION device show "$IFACE" 2>/dev/null | head -1) || CONN=""
+    [ "$CONN" = "--" ] && CONN=""
+    if [ -z "$CONN" ]; then
+        CONN=$(nmcli -g NAME,DEVICE connection show 2>/dev/null \
+            | grep ":${IFACE}$" | cut -d: -f1 | head -1) || CONN=""
+    fi
+    [ -z "$CONN" ] && die "no connection profile found for $IFACE"
+
+    # nmcli connection up reconnects even if already active, applying the reloaded config.
+    nmcli connection up "$CONN" 2>/dev/null || die "nmcli connection up failed"
+    printf '{"ok":true,"interface":"%s","connection":"%s"}\n' "$IFACE" "$CONN"
+    ;;
+
 *)
-    printf 'Usage: %s {status|read|save-wifi-dhcp|save-wifi-static}\n' "$(basename "$0")" >&2
+    printf 'Usage: %s {status|read|save-wifi-dhcp|save-wifi-static|apply-wifi}\n' "$(basename "$0")" >&2
     exit 1
     ;;
 esac

@@ -11,7 +11,7 @@ dongle with constrained memory (~384 MB usable). Read this before installing.
 | OctoPi image | ✗ — this is Alpine Linux, not OctoPi |
 | Docker | ✗ — intentionally avoided; too heavy for ~384 MB RAM |
 | Webcam / live monitoring | Optional — install a lightweight plugin; no timelapse by default |
-| Pre-installed plugins | ✗ — OctoPrint core only |
+| Pre-installed plugins | Resource Monitor 0.4.0 |
 | LTE modem | ✗ — disabled in the OctoPrint DTB profile to reclaim ~86 MB RAM |
 
 OctoPrint runs as a native OpenRC service under a dedicated `octoprint` user, installed via
@@ -33,10 +33,8 @@ plugins (OctoPrint-Dashboard, timelapse, etc.) on this device.
 
 ## Interesting plugins
 
-Install these manually from OctoPrint's Plugin Manager; they are not preinstalled in the image.
-
-- **Resource Monitor** — useful on this low-RAM device. Install it from OctoPrint's plugin list and watch RAM, CPU, `/run`, and rootfs while printing.
-- **OctoPrint-RTSP** — for camera monitoring via RTSP:
+- **Resource Monitor** — preinstalled (v0.4.0). Watches RAM, CPU, disk, and network — essential on this low-RAM device.
+- **OctoPrint-RTSP** — for camera monitoring via RTSP (install manually from OctoPrint's Plugin Manager):
   ```text
   https://github.com/soopahfly/OctoPrint-RTSP/archive/v1.0.3.zip
   ```
@@ -169,7 +167,8 @@ The script is idempotent — safe to rerun if interrupted. It:
 1. Installs Alpine system dependencies (`python3`, build headers)
 2. Creates the `octoprint` service user
 3. Fetches the latest OctoPrint release from PyPI into `/opt/octoprint/venv`
-4. Installs the OpenRC service and enables it in the default runlevel
+4. Installs the Resource Monitor plugin (v0.4.0, pinned)
+5. Installs the OpenRC service and enables it in the default runlevel
 
 Install takes **10–20 minutes** on the dongle (slow single-core pip build).
 

@@ -73,6 +73,20 @@ if [ "$NEEDS_INSTALL" -eq 1 ]; then
     echo "$LATEST" > "$VERSION_FILE"
 fi
 
+# Install Resource Monitor plugin (pinned release)
+RM_VERSION="0.4.0"
+RM_URL="https://github.com/Renaud11232/OctoPrint-Resource-Monitor/archive/refs/tags/${RM_VERSION}.zip"
+RM_INSTALLED=$("$VENV_DIR/bin/pip" show OctoPrint-Resource-Monitor 2>/dev/null | awk '/^Version:/{print $2}')
+# ponytail: idempotent - skip if exact pinned version already present
+if [ "$RM_INSTALLED" = "$RM_VERSION" ]; then
+    log "[+] Resource Monitor $RM_VERSION already installed — skipping."
+else
+    log "[*] Installing Resource Monitor plugin $RM_VERSION..."
+    run_quiet "$VENV_DIR/bin/pip" install --quiet "$RM_URL" \
+        || { echo "ERROR: Failed to install Resource Monitor $RM_VERSION."; exit 1; }
+    log "[+] Resource Monitor $RM_VERSION installed."
+fi
+
 if [ ! -f "$DATA_DIR/config.yaml" ]; then
     log "[*] Installing default OctoPrint config..."
     cat > "$DATA_DIR/config.yaml" <<'YAML'

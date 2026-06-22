@@ -1,7 +1,7 @@
 .PHONY: builder build-vm build-all-vm fetch dts _check-env clean build build-all \
         octoprint docker zoraxy verify-octoprint \
         kernel-env-check modules kernel-env kernel-modules \
-        plugins
+        plugins deploy-led
 
 # ponytail: pass PROFILE=<name> on the make command line, e.g. make build PROFILE=octoprint
 export PROFILE ?=
@@ -82,3 +82,16 @@ plugins:
 	  mkdir -p dist && \
 	  zip -r dist/OctoPrint-LedStatus-1.0.0.zip setup.py smoke_check.py octoprint_led_status/
 	@echo "[+] plugins/octoprint-led-status/dist/OctoPrint-LedStatus-1.0.0.zip"
+
+# ponytail: live-device install — make deploy-led HOST=root@<device-ip>
+deploy-led: plugins
+	scp plugins/octoprint-led-status/dist/OctoPrint-LedStatus-1.0.0.zip \
+	    plugins/octoprint-led-status/helper/led-helper \
+	    plugins/octoprint-led-status/sudoers/octoprint-led \
+	    stacks/install-octoprint.sh \
+	    $(HOST):/tmp/
+	ssh $(HOST) env \
+	    LED_STATUS_ZIP=/tmp/OctoPrint-LedStatus-1.0.0.zip \
+	    LED_STATUS_HELPER=/tmp/led-helper \
+	    LED_STATUS_SUDOERS=/tmp/octoprint-led \
+	    bash /tmp/install-octoprint.sh -y

@@ -42,6 +42,23 @@ def test_no_red_power():
     print("  [OK] helper has no red:power references in code")
 
 
+def test_sudoers_covers_helper_states():
+    """Every state the helper accepts must have a NOPASSWD line in the sudoers file."""
+    sudoers = os.path.join(os.path.dirname(__file__), "sudoers", "octoprint-led")
+    with open(sudoers) as f:
+        sudoers_text = f.read()
+    with open(HELPER) as f:
+        helper_text = f.read()
+    # Extract states from the helper's usage line — cheap and authoritative.
+    import re
+    m = re.search(r'Usage.*?\{([^}]+)\}', helper_text)
+    assert m, "helper missing Usage line with state list"
+    states = [s.strip() for s in m.group(1).split('|')]
+    missing = [s for s in states if f"led-helper {s}" not in sudoers_text]
+    assert not missing, f"sudoers missing states: {missing}"
+    print(f"  [OK] sudoers covers all helper states: {states}")
+
+
 def test_degrade():
     """_set_led_state must not raise even when helper is absent."""
     code = """
@@ -64,7 +81,7 @@ print("ok")
 if __name__ == "__main__":
     print("OctoPrint-LedStatus smoke check")
     failures = []
-    for t in [test_helper_syntax, test_helper_accepts_new_states, test_helper_rejects_unknown, test_no_red_power, test_degrade]:
+    for t in [test_helper_syntax, test_helper_accepts_new_states, test_helper_rejects_unknown, test_no_red_power, test_sudoers_covers_helper_states, test_degrade]:
         try:
             t()
         except Exception as e:

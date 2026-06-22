@@ -9,6 +9,10 @@ VERSION_FILE="$INSTALL_DIR/version"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 RESOURCE_MONITOR_VERSION="0.4.0"
 RESOURCE_MONITOR_ZIP="${RESOURCE_MONITOR_ZIP:-}"
+LED_STATUS_VERSION="1.0.0"
+LED_STATUS_ZIP="${LED_STATUS_ZIP:-}"
+LED_STATUS_HELPER="${LED_STATUS_HELPER:-$SCRIPT_DIR/../plugins/octoprint-led-status/helper/led-helper}"
+LED_STATUS_SUDOERS="${LED_STATUS_SUDOERS:-$SCRIPT_DIR/../plugins/octoprint-led-status/sudoers/octoprint-led}"
 YES=0
 
 while [ $# -gt 0 ]; do
@@ -91,6 +95,37 @@ else
     exit 1
 fi
 
+# Install LED Status plugin (pinned release zip prepared by the image build)
+LS_INSTALLED=$("$VENV_DIR/bin/pip" show OctoPrint-LedStatus 2>/dev/null | awk '/^Version:/{print $2}' || true)
+# ponytail: idempotent - skip if exact pinned version already present
+if [ "$LS_INSTALLED" = "$LED_STATUS_VERSION" ]; then
+    log "[+] LED Status $LED_STATUS_VERSION already installed — skipping."
+elif [ -n "$LED_STATUS_ZIP" ] && [ -f "$LED_STATUS_ZIP" ]; then
+    log "[*] Installing LED Status plugin $LED_STATUS_VERSION from $LED_STATUS_ZIP..."
+    run_quiet "$VENV_DIR/bin/pip" install "$LED_STATUS_ZIP" \
+        || { echo "ERROR: Failed to install LED Status $LED_STATUS_VERSION."; exit 1; }
+    log "[+] LED Status $LED_STATUS_VERSION installed."
+else
+    echo "ERROR: LED Status zip not bundled: ${LED_STATUS_ZIP:-unset}"
+    exit 1
+fi
+
+log "[*] Installing LED Status helper..."
+# ponytail: always overwrite — helper is root-owned; idempotent by content
+install -o root -g root -m 0755 "$LED_STATUS_HELPER" /usr/local/sbin/led-helper
+log "[+] Helper installed: /usr/local/sbin/led-helper (root:root 0755)"
+
+log "[*] Installing LED Status sudoers rule..."
+if command -v visudo >/dev/null 2>&1; then
+    visudo -cf "$LED_STATUS_SUDOERS" \
+        || { echo "ERROR: sudoers syntax invalid: $LED_STATUS_SUDOERS"; exit 1; }
+fi
+install -o root -g root -m 0440 "$LED_STATUS_SUDOERS" /etc/sudoers.d/octoprint-led
+log "[+] Sudoers rule installed: /etc/sudoers.d/octoprint-led (0440)"
+if command -v visudo >/dev/null 2>&1; then
+    visudo -c >/dev/null || { echo "ERROR: sudoers validation failed post-install"; exit 1; }
+fi
+
 if [ ! -f "$DATA_DIR/config.yaml" ]; then
     log "[*] Installing default OctoPrint config..."
     cat > "$DATA_DIR/config.yaml" <<'YAML'
@@ -118,6 +153,9 @@ cat > /etc/sudoers.d/octoprint <<'SUDOERS'
 octoprint ALL=(root) NOPASSWD: /sbin/rc-service octoprint restart, /sbin/reboot, /sbin/poweroff, /sbin/halt
 SUDOERS
 chmod 0440 /etc/sudoers.d/octoprint
+if command -v visudo >/dev/null 2>&1; then
+    visudo -c >/dev/null || { echo "ERROR: sudoers validation failed post-install"; exit 1; }
+fi
 
 log "[*] Installing OpenRC service..."
 cat > /etc/init.d/octoprint <<'EOF'

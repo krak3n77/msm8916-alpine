@@ -363,15 +363,16 @@ EOF
     chmod +x "$CHROOT/etc/local.d/octoprint-usb.start"
 
     echo "[*] Preinstalling OctoPrint..."
+    NETWORK_PLUGIN_ZIP_HOST="$(plugins/build-octoprint-network-settings.sh "$STAGING/plugin-dist")"
     install -Dm0755 stacks/install-octoprint.sh "$CHROOT/tmp/install-octoprint.sh"
     install -Dm0755 stacks/install-nm-wrapper.sh "$CHROOT/tmp/install-nm-wrapper.sh"
-    cp -R octoprint-network-settings "$CHROOT/tmp/octoprint-network-settings"
+    install -Dm0644 "$NETWORK_PLUGIN_ZIP_HOST" "$CHROOT/tmp/$(basename "$NETWORK_PLUGIN_ZIP_HOST")"
     install -Dm0755 configs/nm-wrapper/nm-wrapper "$CHROOT/tmp/nm-wrapper"
-    chroot "$CHROOT" env NETWORK_PLUGIN_SRC=/tmp/octoprint-network-settings bash /tmp/install-octoprint.sh -y
+    chroot "$CHROOT" env NETWORK_PLUGIN_ZIP="/tmp/$(basename "$NETWORK_PLUGIN_ZIP_HOST")" bash /tmp/install-octoprint.sh -y
     chroot "$CHROOT" env WRAPPER_SRC=/tmp/nm-wrapper bash /tmp/install-nm-wrapper.sh
     chroot "$CHROOT" /opt/octoprint/venv/bin/pip show OctoPrint-NetworkSettings >/dev/null
     chroot "$CHROOT" test -x /usr/local/sbin/nm-wrapper
-    rm -rf "$CHROOT/tmp/install-octoprint.sh" "$CHROOT/tmp/install-nm-wrapper.sh" "$CHROOT/tmp/octoprint-network-settings" "$CHROOT/tmp/nm-wrapper"
+    rm -rf "$CHROOT/tmp/install-octoprint.sh" "$CHROOT/tmp/install-nm-wrapper.sh" "$CHROOT/tmp/$(basename "$NETWORK_PLUGIN_ZIP_HOST")" "$CHROOT/tmp/nm-wrapper"
 fi
 
 # Optional Zoraxy appliance preinstall

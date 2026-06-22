@@ -95,10 +95,11 @@ else
 fi
 
 if grep -q 'OctoPrint-NetworkSettings' "$REPO/stacks/install-octoprint.sh" \
-   && grep -q 'NETWORK_PLUGIN_SRC=/tmp/octoprint-network-settings' "$REPO/scripts/generate_alpine_rootfs.sh"; then
-    ok "Appliance install bundles and installs the Network Settings plugin"
+   && grep -q 'build-octoprint-network-settings.sh' "$REPO/scripts/generate_alpine_rootfs.sh" \
+   && grep -q 'NETWORK_PLUGIN_ZIP=' "$REPO/scripts/generate_alpine_rootfs.sh"; then
+    ok "Appliance builds a plugin zip and installs Network Settings from it"
 else
-    fail "Appliance install is missing bundled Network Settings plugin integration"
+    fail "Appliance install is missing bundled Network Settings plugin zip integration"
 fi
 
 if grep -q 'WRAPPER_SRC=/tmp/nm-wrapper' "$REPO/scripts/generate_alpine_rootfs.sh" \

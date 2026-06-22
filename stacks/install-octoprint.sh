@@ -7,7 +7,12 @@ VENV_DIR="$INSTALL_DIR/venv"
 DATA_DIR="/var/lib/octoprint"
 VERSION_FILE="$INSTALL_DIR/version"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-NETWORK_PLUGIN_SRC="${NETWORK_PLUGIN_SRC:-$SCRIPT_DIR/../octoprint-network-settings}"
+NETWORK_PLUGIN_ZIP="${NETWORK_PLUGIN_ZIP:-}"
+if [ -z "$NETWORK_PLUGIN_ZIP" ]; then
+    for _zip in "$SCRIPT_DIR"/../plugins/octoprint-network-settings/dist/OctoPrint-NetworkSettings-*.zip; do
+        [ -f "$_zip" ] && NETWORK_PLUGIN_ZIP="$_zip" && break
+    done
+fi
 NETWORK_PLUGIN_NAME="OctoPrint-NetworkSettings"
 YES=0
 
@@ -91,21 +96,19 @@ else
 fi
 
 NETWORK_PLUGIN_VERSION=""
-if [ -f "$NETWORK_PLUGIN_SRC/setup.py" ]; then
-    NETWORK_PLUGIN_VERSION=$(sed -n 's/.*version="\([^"]*\)".*/\1/p' "$NETWORK_PLUGIN_SRC/setup.py" | head -n1)
-fi
+[ -n "$NETWORK_PLUGIN_ZIP" ] && NETWORK_PLUGIN_VERSION=$(basename "$NETWORK_PLUGIN_ZIP" | sed -n 's/OctoPrint-NetworkSettings-\(.*\)\.zip/\1/p')
 NETWORK_PLUGIN_INSTALLED=$("$VENV_DIR/bin/pip" show "$NETWORK_PLUGIN_NAME" 2>/dev/null | awk '/^Version:/{print $2}')
-if [ -d "$NETWORK_PLUGIN_SRC" ]; then
+if [ -n "$NETWORK_PLUGIN_ZIP" ] && [ -f "$NETWORK_PLUGIN_ZIP" ]; then
     if [ -n "$NETWORK_PLUGIN_VERSION" ] && [ "$NETWORK_PLUGIN_INSTALLED" = "$NETWORK_PLUGIN_VERSION" ]; then
         log "[+] Network Settings plugin $NETWORK_PLUGIN_VERSION already installed — skipping."
     else
-        log "[*] Installing Network Settings plugin from $NETWORK_PLUGIN_SRC..."
-        run_quiet "$VENV_DIR/bin/pip" install --quiet "$NETWORK_PLUGIN_SRC" \
+        log "[*] Installing Network Settings plugin from $NETWORK_PLUGIN_ZIP..."
+        run_quiet "$VENV_DIR/bin/pip" install --quiet "$NETWORK_PLUGIN_ZIP" \
             || { echo "ERROR: Failed to install Network Settings plugin."; exit 1; }
         log "[+] Network Settings plugin installed."
     fi
 else
-    log "[*] Network Settings plugin source not bundled — skipping."
+    log "[*] Network Settings plugin zip not bundled — skipping."
 fi
 
 if [ ! -f "$DATA_DIR/config.yaml" ]; then
@@ -116,10 +119,14 @@ server:
     serverRestartCommand: sudo /sbin/rc-service octoprint restart
     systemRestartCommand: sudo /sbin/reboot
     systemShutdownCommand: sudo /sbin/poweroff
-webcam:
-  stream:
-  snapshot:
-  ffmpeg:
+
+appearance:
+  components:
+    disabled:
+      tab:
+        - timelapse
+      settings:
+        - webcam
 YAML
 fi
 
@@ -172,7 +179,7 @@ run_quiet rc-update add octoprint default
 # ponytail: minimal sanity check - binary and bundled plugin must be callable when present
 "$VENV_DIR/bin/octoprint" --version >/dev/null \
     || { echo "[!] WARNING: octoprint binary check failed."; exit 1; }
-if [ -d "$NETWORK_PLUGIN_SRC" ]; then
+if [ -n "$NETWORK_PLUGIN_ZIP" ] && [ -f "$NETWORK_PLUGIN_ZIP" ]; then
     "$VENV_DIR/bin/pip" show "$NETWORK_PLUGIN_NAME" >/dev/null \
         || { echo "[!] WARNING: Network Settings plugin check failed."; exit 1; }
 fi

@@ -151,6 +151,67 @@ else
     fail "OctoPrint image missing USB host/module boot setup"
 fi
 
+# ---- 6. LED status plugin (issue-005) -----------------------
+echo ""
+echo "-- 6. LED status plugin --"
+
+_LS_ZIP="$REPO/plugins/octoprint-led-status/dist/OctoPrint-LedStatus-1.0.0.zip"
+_LS_HELPER="$REPO/plugins/octoprint-led-status/helper/led-helper"
+_LS_SUDOERS="$REPO/plugins/octoprint-led-status/sudoers/octoprint-led"
+
+if [ -f "$_LS_ZIP" ]; then
+    ok "LED Status plugin artifact present: plugins/octoprint-led-status/dist/OctoPrint-LedStatus-1.0.0.zip"
+else
+    fail "LED Status plugin artifact missing: $_LS_ZIP"
+fi
+
+if grep -q 'LED_STATUS_ZIP_HOST=' "$REPO/scripts/generate_alpine_rootfs.sh" \
+   && grep -q 'OctoPrint-LedStatus' "$REPO/scripts/generate_alpine_rootfs.sh"; then
+    ok "Rootfs generator bundles LED Status zip into chroot install"
+else
+    fail "Rootfs generator does not bundle LED Status zip"
+fi
+
+if [ -f "$_LS_HELPER" ]; then
+    ok "LED Status helper present: plugins/octoprint-led-status/helper/led-helper"
+else
+    fail "LED Status helper missing: $_LS_HELPER"
+fi
+
+if grep -q 'install.*led-helper' "$REPO/stacks/install-octoprint.sh"; then
+    ok "Installer deploys helper to /usr/local/sbin/led-helper (root:root 0755)"
+else
+    fail "Installer does not deploy led-helper"
+fi
+
+if [ -f "$_LS_SUDOERS" ]; then
+    ok "LED Status sudoers file present: plugins/octoprint-led-status/sudoers/octoprint-led"
+    # Narrow scope: lines must end with an explicit state, not bare '/usr/local/sbin/led-helper'
+    if grep -qE 'NOPASSWD:.*led-helper$' "$_LS_SUDOERS"; then
+        fail "Sudoers rule has wildcard (unrestricted args) — must list explicit states"
+    else
+        ok "Sudoers rule is narrowly scoped (explicit states, no wildcard)"
+    fi
+else
+    fail "LED Status sudoers file missing: $_LS_SUDOERS"
+fi
+
+# Contract: only green:wan and blue:wlan are managed; red:power must not appear
+if grep -q 'GREEN=/sys/class/leds/green:wan' "$_LS_HELPER" \
+   && grep -q 'BLUE=/sys/class/leds/blue:wlan' "$_LS_HELPER"; then
+    ok "Helper contract: manages green:wan and blue:wlan only"
+else
+    fail "Helper does not define expected green:wan / blue:wlan sysfs paths"
+fi
+
+if grep -q '/sys/class/leds/red' "$_LS_HELPER"; then
+    fail "Helper writes to red:power sysfs path — must remain unmanaged (device default)"
+else
+    ok "Helper does not write to red:power sysfs path — device default preserved"
+fi
+
+unset _LS_ZIP _LS_HELPER _LS_SUDOERS
+
 # ---- Summary --------------------------------------------------
 echo ""
 echo "=== Automated: $PASS passed, $FAIL failed ==="

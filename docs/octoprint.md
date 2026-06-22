@@ -11,7 +11,7 @@ dongle with constrained memory (~384 MB usable). Read this before installing.
 | OctoPi image | ✗ — this is Alpine Linux, not OctoPi |
 | Docker | ✗ — intentionally avoided; too heavy for ~384 MB RAM |
 | Webcam / live monitoring | Optional — install a lightweight plugin; no timelapse by default |
-| Pre-installed plugins | Resource Monitor 0.4.0 |
+| Pre-installed plugins | Resource Monitor 0.4.0, LED Status 1.0.0 |
 | LTE modem | ✗ — disabled in the OctoPrint DTB profile to reclaim ~86 MB RAM |
 
 OctoPrint runs as a native OpenRC service under a dedicated `octoprint` user, installed via
@@ -34,6 +34,7 @@ plugins (OctoPrint-Dashboard, timelapse, etc.) on this device.
 ## Interesting plugins
 
 - **Resource Monitor** — preinstalled (v0.4.0). Watches RAM, CPU, disk, and network. On this box you only get ~384 MB usable RAM, so this is the fast way to catch memory pressure before OctoPrint or a plugin gets OOM-killed.
+- **LED Status** — preinstalled (v1.0.0). Drives the dongle's green and blue LEDs to show printer state at a glance. See [docs/led-status.md](led-status.md).
 - **OctoPrint-RTSP** — for camera monitoring via RTSP (install manually from OctoPrint's Plugin Manager):
   ```text
   https://github.com/soopahfly/OctoPrint-RTSP/archive/v1.0.3.zip
@@ -157,7 +158,8 @@ The script is idempotent — safe to rerun if interrupted. It:
 2. Creates the `octoprint` service user
 3. Fetches the latest OctoPrint release from PyPI into `/opt/octoprint/venv`
 4. Installs the Resource Monitor plugin (v0.4.0, pinned)
-5. Installs the OpenRC service and enables it in the default runlevel
+5. Installs the LED Status plugin (v1.0.0, pinned) and its helper + sudoers rule
+6. Installs the OpenRC service and enables it in the default runlevel
 
 Install takes **10–20 minutes** on the dongle (slow single-core pip build).
 
@@ -234,4 +236,5 @@ Resource Monitor is preinstalled. Confirm it is listed in Plugin Manager and its
 | OctoPrint unreachable on port 5000 | `rc-service octoprint status`, check logs |
 | OOM / service killed | `free -m`, `dmesg | grep -i oom` — disable heavy plugins, confirm OctoPrint DTB profile |
 | Modem still present | Wrong DTB loaded — check `extlinux.conf` FDT line |
+| LEDs not changing state | Check `/sys/class/leds/green:wan` and `/sys/class/leds/blue:wlan` exist; see [docs/led-status.md — Troubleshooting](led-status.md#troubleshooting) |
 | Install fails mid-way | Rerun `sudo ~/install-octoprint.sh` — idempotent |

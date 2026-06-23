@@ -1,9 +1,10 @@
 #!/bin/sh
-# ponytail: idle/disconnected/printing/paused/error/off states, only green:wan and blue:wlan
-# Never writes to red:power.
+# ponytail: idle/disconnected/printing/paused/error/off states — green:wan, blue:wlan, red:power
+# red:power = ON (appliance alive) for all active states; OFF only on shutdown.
 
 GREEN=/sys/class/leds/green:wan
 BLUE=/sys/class/leds/blue:wlan
+RED=/sys/class/leds/red:power
 
 led_solid() {
     # Args: <led-path> <brightness 0-255>
@@ -30,22 +31,27 @@ led_blink_slow() {
 
 case "$1" in
     idle)
+        led_solid "$RED"   255
         led_solid "$GREEN" 255
         led_solid "$BLUE"  0
         ;;
     disconnected|error)
+        led_solid "$RED"   255
         led_solid "$GREEN" 0
         led_blink "$BLUE"
         ;;
     printing)
+        led_solid "$RED"   255
         led_solid "$GREEN" 255
         led_solid "$BLUE"  255
         ;;
     paused)
+        led_solid "$RED"   255
         led_solid "$GREEN" 255
         led_blink_slow "$BLUE"
         ;;
     off)
+        led_solid "$RED"   0
         led_solid "$GREEN" 0
         led_solid "$BLUE"  0
         ;;

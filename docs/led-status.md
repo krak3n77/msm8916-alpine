@@ -11,25 +11,22 @@ The MSM8916 dongle exposes three LEDs under `/sys/class/leds/`:
 |---|---|---|
 | `green:wan` | Green | ✓ — plugin controls brightness |
 | `blue:wlan` | Blue | ✓ — plugin controls brightness / blink |
-| `red:power` | Red | ✗ — device default; **intentionally not managed** |
-
-The red power LED is driven by the hardware or kernel default and is left
-untouched. The plugin never writes to `/sys/class/leds/red:power`.
+| `red:power` | Red | ✓ — on when appliance is active, off on shutdown |
 
 ## LED state mapping
 
-| OctoPrint state | Helper arg | Green (`green:wan`) | Blue (`blue:wlan`) |
-|---|---|---|---|
-| Startup / booting | `disconnected` | off | fast-blink (100 ms) |
-| Printer connected, idle | `idle` | solid on | off |
-| Printing | `printing` | solid on | solid on |
-| Paused | `paused` | solid on | slow-blink (500 ms) |
-| Error / print failed | `disconnected` | off | fast-blink (100 ms) |
-| Printer disconnected | `disconnected` | off | fast-blink (100 ms) |
-| Shutdown / plugin stop | `off` | off | off |
+| OctoPrint state | Helper arg | Red (`red:power`) | Green (`green:wan`) | Blue (`blue:wlan`) |
+|---|---|---|---|---|
+| Startup / booting | `disconnected` | solid on | off | fast-blink (100 ms) |
+| Printer connected, idle | `idle` | solid on | solid on | off |
+| Printing | `printing` | solid on | solid on | solid on |
+| Paused | `paused` | solid on | solid on | slow-blink (500 ms) |
+| Error / print failed | `disconnected` | solid on | off | fast-blink (100 ms) |
+| Printer disconnected | `disconnected` | solid on | off | fast-blink (100 ms) |
+| Shutdown / plugin stop | `off` | off | off | off |
 
-> **Summary:** Green = OctoPrint is connected to the printer. Blue = active
-> job or error activity. Both off = shutdown or LED system unavailable.
+> **Summary:** Red = appliance/OctoPrint is alive (off only on shutdown). Green = OctoPrint
+> is connected to the printer. Blue = active job or error activity. All off = shutdown.
 
 ## Components
 
@@ -107,5 +104,5 @@ sudo rc-service octoprint restart
 | `sudo: /usr/local/sbin/led-helper: command not found` | Helper not deployed: run step 3 of the live-device install above |
 | Permission denied calling helper | Sudoers rule missing or wrong path: `sudo visudo -c`, check `/etc/sudoers.d/octoprint-led` |
 | Plugin not listed in OctoPrint Plugin Manager | `pip show OctoPrint-LedStatus` — if absent, reinstall from zip; restart OctoPrint |
-| Red LED turns off unexpectedly | Not caused by this plugin — check power/hardware; plugin never writes to `red:power` |
+| Red LED off unexpectedly while running | Plugin sets red ON at startup and for all active states; if off, check that OctoPrint service is running (`rc-service octoprint status`) |
 | After reinstall LEDs stay in wrong state | Restart OctoPrint: `sudo rc-service octoprint restart`; plugin sets `disconnected` on startup |

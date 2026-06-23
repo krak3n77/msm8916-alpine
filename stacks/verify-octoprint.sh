@@ -198,16 +198,17 @@ fi
 
 # Contract: only green:wan and blue:wlan are managed; red:power must not appear
 if grep -q 'GREEN=/sys/class/leds/green:wan' "$_LS_HELPER" \
-   && grep -q 'BLUE=/sys/class/leds/blue:wlan' "$_LS_HELPER"; then
-    ok "Helper contract: manages green:wan and blue:wlan only"
+   && grep -q 'BLUE=/sys/class/leds/blue:wlan' "$_LS_HELPER" \
+   && grep -q 'RED=/sys/class/leds/red:power' "$_LS_HELPER"; then
+    ok "Helper contract: manages green:wan, blue:wlan, and red:power"
 else
-    fail "Helper does not define expected green:wan / blue:wlan sysfs paths"
+    fail "Helper does not define expected green:wan / blue:wlan / red:power sysfs paths"
 fi
 
-if grep -q '/sys/class/leds/red' "$_LS_HELPER"; then
-    fail "Helper writes to red:power sysfs path — must remain unmanaged (device default)"
+if grep -q 'RED=/sys/class/leds/red:power' "$_LS_HELPER"; then
+    ok "Helper manages red:power as appliance power indicator (on=active, off=shutdown)"
 else
-    ok "Helper does not write to red:power sysfs path — device default preserved"
+    fail "Helper missing red:power management"
 fi
 
 unset _LS_ZIP _LS_HELPER _LS_SUDOERS

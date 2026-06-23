@@ -2,10 +2,9 @@
 OctoPrint-LedStatus: visual LED feedback for printer states.
 
 Calls /usr/local/sbin/led-helper via sudo to control:
+  red:power  — on=any active state (idle/printing/paused/disconnected/error), off=shutdown
   green:wan  — on=idle/ready/printing/paused, off=disconnected/error/off
   blue:wlan  — off=idle, on=printing, slow-blink=paused, fast-blink=disconnected/error
-
-red:power is never touched.
 """
 import subprocess
 

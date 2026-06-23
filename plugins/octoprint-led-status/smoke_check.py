@@ -4,6 +4,7 @@ Smoke check for OctoPrint-LedStatus.
 Runs without OctoPrint installed — tests helper script only + degrade path.
 """
 import os
+import re
 import subprocess
 import sys
 
@@ -33,13 +34,15 @@ def test_helper_rejects_unknown():
     print("  [OK] helper rejects unknown state with non-zero exit")
 
 
-def test_no_red_power():
+def test_red_power_managed():
+    """red:power must be defined and set solid (no blink) for active states and off for shutdown."""
     with open(HELPER) as f:
-        non_comment = "\n".join(
-            l for l in f.read().splitlines() if not l.lstrip().startswith("#")
-        )
-    assert "red:power" not in non_comment, "helper must not reference red:power outside comments"
-    print("  [OK] helper has no red:power references in code")
+        src = f.read()
+    non_comment = "\n".join(l for l in src.splitlines() if not l.lstrip().startswith("#"))
+    assert 'RED=/sys/class/leds/red:power' in non_comment, "helper must define RED sysfs path"
+    assert 'led_solid "$RED"' in non_comment, "helper must set RED via led_solid (no blinking)"
+    assert not re.search(r'led_blink.*RED', non_comment), "helper must not blink red:power"
+    print("  [OK] helper manages red:power as solid on/off appliance indicator")
 
 
 def test_sudoers_covers_helper_states():
@@ -50,7 +53,6 @@ def test_sudoers_covers_helper_states():
     with open(HELPER) as f:
         helper_text = f.read()
     # Extract states from the helper's usage line — cheap and authoritative.
-    import re
     m = re.search(r'Usage.*?\{([^}]+)\}', helper_text)
     assert m, "helper missing Usage line with state list"
     states = [s.strip() for s in m.group(1).split('|')]
@@ -81,7 +83,7 @@ print("ok")
 if __name__ == "__main__":
     print("OctoPrint-LedStatus smoke check")
     failures = []
-    for t in [test_helper_syntax, test_helper_accepts_new_states, test_helper_rejects_unknown, test_no_red_power, test_sudoers_covers_helper_states, test_degrade]:
+    for t in [test_helper_syntax, test_helper_accepts_new_states, test_helper_rejects_unknown, test_red_power_managed, test_sudoers_covers_helper_states, test_degrade]:
         try:
             t()
         except Exception as e:

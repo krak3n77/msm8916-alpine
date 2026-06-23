@@ -28,7 +28,7 @@ build-all-vm:
 
 fetch:
 	@mkdir -p files
-	vagrant ssh -c "cd /app/files && tar cf - *.img.gz *.zip *.bin dtbs/ 2>/dev/null" | tar xf - -C files/
+	vagrant ssh -c "cd /app/files && tar cf - *.img.gz *.tgz *.zip *.bin dtbs/ 2>/dev/null" | tar xf - -C files/
 	@echo "[+] Fetched to files/:"
 	@ls -lh files/
 

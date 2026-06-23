@@ -162,7 +162,9 @@ $(for svc in ${SERVICES_AUTOSTART:-}; do echo "rc-update add $svc default"; done
 "
 
 # Sudo config
+install -d -m0750 "$CHROOT/etc/sudoers.d"
 echo "${USERNAME} ALL=(ALL:ALL) NOPASSWD: ALL" > "$CHROOT/etc/sudoers.d/${USERNAME}"
+chmod 0440 "$CHROOT/etc/sudoers.d/${USERNAME}"
 
 # Docker install + configuration (profile-driven)
 if [ "$DOCKER_ENABLE" = "yes" ]; then
@@ -381,13 +383,32 @@ EOF
     RESOURCE_MONITOR_VERSION="0.4.0"
     RESOURCE_MONITOR_ZIP_HOST="$STAGING/OctoPrint-Resource-Monitor-${RESOURCE_MONITOR_VERSION}.zip"
     wget -q "https://github.com/Renaud11232/OctoPrint-Resource-Monitor/archive/refs/tags/${RESOURCE_MONITOR_VERSION}.zip" -O "$RESOURCE_MONITOR_ZIP_HOST"
+
+    # LED Status zip: build if missing, then copy artifacts into chroot
+    LED_STATUS_ZIP_HOST="plugins/octoprint-led-status/dist/OctoPrint-LedStatus-1.0.0.zip"
+    if [ ! -f "$LED_STATUS_ZIP_HOST" ]; then
+        echo "[*] Building LED Status plugin zip..."
+        make -C "$(pwd)" plugins
+    fi
+    install -Dm0644 "$LED_STATUS_ZIP_HOST"                              "$CHROOT/tmp/$(basename "$LED_STATUS_ZIP_HOST")"
+    install -Dm0755 plugins/octoprint-led-status/helper/led-helper      "$CHROOT/tmp/led-helper"
+    install -Dm0640 plugins/octoprint-led-status/sudoers/octoprint-led  "$CHROOT/tmp/octoprint-led-sudoers"
+
     install -Dm0755 stacks/install-octoprint.sh "$CHROOT/tmp/install-octoprint.sh"
     install -Dm0644 "$RESOURCE_MONITOR_ZIP_HOST" "$CHROOT/tmp/$(basename "$RESOURCE_MONITOR_ZIP_HOST")"
     chroot "$CHROOT" env \
         RESOURCE_MONITOR_ZIP="/tmp/$(basename "$RESOURCE_MONITOR_ZIP_HOST")" \
+        LED_STATUS_ZIP="/tmp/$(basename "$LED_STATUS_ZIP_HOST")" \
+        LED_STATUS_HELPER="/tmp/led-helper" \
+        LED_STATUS_SUDOERS="/tmp/octoprint-led-sudoers" \
         bash /tmp/install-octoprint.sh -y
     chroot "$CHROOT" /opt/octoprint/venv/bin/pip show OctoPrint-Resource-Monitor >/dev/null
-    rm -rf "$CHROOT/tmp/install-octoprint.sh" "$CHROOT/tmp/$(basename "$RESOURCE_MONITOR_ZIP_HOST")"
+    chroot "$CHROOT" /opt/octoprint/venv/bin/pip show OctoPrint-LedStatus >/dev/null
+    rm -rf "$CHROOT/tmp/install-octoprint.sh" \
+           "$CHROOT/tmp/$(basename "$RESOURCE_MONITOR_ZIP_HOST")" \
+           "$CHROOT/tmp/$(basename "$LED_STATUS_ZIP_HOST")" \
+           "$CHROOT/tmp/led-helper" \
+           "$CHROOT/tmp/octoprint-led-sudoers"
 fi
 
 # Optional Zoraxy appliance preinstall

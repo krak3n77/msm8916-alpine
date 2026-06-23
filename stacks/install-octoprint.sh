@@ -112,6 +112,7 @@ fi
 
 log "[*] Installing LED Status helper..."
 # ponytail: always overwrite — helper is root-owned; idempotent by content
+mkdir -p /usr/local/sbin /etc/sudoers.d
 install -o root -g root -m 0755 "$LED_STATUS_HELPER" /usr/local/sbin/led-helper
 log "[+] Helper installed: /usr/local/sbin/led-helper (root:root 0755)"
 

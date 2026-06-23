@@ -1,0 +1,50 @@
+<h3>LED Status</h3>
+
+<p>This plugin shows the OctoPrint/printer state on the appliance LEDs.</p>
+
+<table class="table table-condensed">
+  <thead>
+    <tr>
+      <th>State</th>
+      <th>Red</th>
+      <th>Green</th>
+      <th>Blue</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Startup / disconnected / error</td>
+      <td>On</td>
+      <td>Off</td>
+      <td>Fast blink</td>
+    </tr>
+    <tr>
+      <td>Idle / ready</td>
+      <td>On</td>
+      <td>On</td>
+      <td>Off</td>
+    </tr>
+    <tr>
+      <td>Printing</td>
+      <td>On</td>
+      <td>On</td>
+      <td>On</td>
+    </tr>
+    <tr>
+      <td>Paused</td>
+      <td>On</td>
+      <td>On</td>
+      <td>Slow blink</td>
+    </tr>
+    <tr>
+      <td>Shutdown</td>
+      <td>Off</td>
+      <td>Off</td>
+      <td>Off</td>
+    </tr>
+  </tbody>
+</table>
+
+<p class="muted">
+  Uses <code>/usr/local/sbin/led-helper</code> via sudo. No settings here; this page is informational.
+</p>

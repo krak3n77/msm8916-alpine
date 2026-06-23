@@ -61,6 +61,17 @@ def test_sudoers_covers_helper_states():
     print(f"  [OK] sudoers covers all helper states: {states}")
 
 
+def test_template_packaged():
+    base = os.path.dirname(__file__)
+    template = os.path.join(base, "octoprint_led_status", "templates", "led_status_settings.jinja2")
+    setup_py = os.path.join(base, "setup.py")
+    assert os.path.exists(template), "settings info template missing"
+    with open(setup_py) as f:
+        setup = f.read()
+    assert "templates/*.jinja2" in setup, "setup.py must package templates"
+    print("  [OK] informational settings template is packaged")
+
+
 def test_degrade():
     """_set_led_state must not raise even when helper is absent."""
     code = """
@@ -83,7 +94,7 @@ print("ok")
 if __name__ == "__main__":
     print("OctoPrint-LedStatus smoke check")
     failures = []
-    for t in [test_helper_syntax, test_helper_accepts_new_states, test_helper_rejects_unknown, test_red_power_managed, test_sudoers_covers_helper_states, test_degrade]:
+    for t in [test_helper_syntax, test_helper_accepts_new_states, test_helper_rejects_unknown, test_red_power_managed, test_sudoers_covers_helper_states, test_template_packaged, test_degrade]:
         try:
             t()
         except Exception as e:

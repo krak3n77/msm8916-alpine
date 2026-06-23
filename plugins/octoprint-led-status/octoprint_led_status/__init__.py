@@ -31,6 +31,7 @@ class LedStatusPlugin(
     octoprint.plugin.StartupPlugin,
     octoprint.plugin.ShutdownPlugin,
     octoprint.plugin.EventHandlerPlugin,
+    octoprint.plugin.TemplatePlugin,
 ):
     def on_after_startup(self):
         # Safe default: assume disconnected until we hear otherwise.
@@ -38,6 +39,9 @@ class LedStatusPlugin(
 
     def on_shutdown(self):
         _set_led_state("off")
+
+    def get_template_configs(self):
+        return [{"type": "settings", "name": "LED Status", "template": "led_status_settings.jinja2"}]
 
     def on_event(self, event, payload):
         e = events.Events

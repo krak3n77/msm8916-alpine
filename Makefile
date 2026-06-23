@@ -5,6 +5,7 @@
 
 # ponytail: pass PROFILE=<name> on the make command line, e.g. make build PROFILE=octoprint
 export PROFILE ?=
+SSH ?= ssh
 
 builder:
 	vagrant up
@@ -85,13 +86,21 @@ plugins:
 
 # ponytail: live-device install — make deploy-led HOST=root@<device-ip>
 deploy-led: plugins
-	scp plugins/octoprint-led-status/dist/OctoPrint-LedStatus-1.0.0.zip \
-	    plugins/octoprint-led-status/helper/led-helper \
-	    plugins/octoprint-led-status/sudoers/octoprint-led \
-	    stacks/install-octoprint.sh \
-	    $(HOST):/tmp/
-	ssh $(HOST) env \
-	    LED_STATUS_ZIP=/tmp/OctoPrint-LedStatus-1.0.0.zip \
-	    LED_STATUS_HELPER=/tmp/led-helper \
-	    LED_STATUS_SUDOERS=/tmp/octoprint-led \
-	    bash /tmp/install-octoprint.sh -y
+	@tmp=$$(mktemp -d); \
+	  cp plugins/octoprint-led-status/dist/OctoPrint-LedStatus-1.0.0.zip $$tmp/; \
+	  cp plugins/octoprint-led-status/helper/led-helper $$tmp/; \
+	  cp plugins/octoprint-led-status/sudoers/octoprint-led $$tmp/; \
+	  printf '%s\n' \
+	    '#!/bin/sh' \
+	    'set -e' \
+	    'export PATH=/sbin:/bin:/usr/sbin:/usr/bin' \
+	    '/opt/octoprint/venv/bin/pip install --force-reinstall --no-deps /tmp/OctoPrint-LedStatus-1.0.0.zip' \
+	    'mkdir -p /usr/local/sbin /etc/sudoers.d' \
+	    'install -o root -g root -m 0755 /tmp/led-helper /usr/local/sbin/led-helper' \
+	    'install -o root -g root -m 0440 /tmp/octoprint-led /etc/sudoers.d/octoprint-led' \
+	    '{ command -v visudo >/dev/null 2>&1 && visudo -c || true; }' \
+	    'rc-service octoprint restart' \
+	    > $$tmp/deploy-led.sh; \
+	  tar -C $$tmp -cf - . | $(SSH) $(HOST) 'tar xf - -C /tmp'; \
+	  rm -rf $$tmp
+	$(SSH) $(HOST) 'sudo -n sh /tmp/deploy-led.sh'

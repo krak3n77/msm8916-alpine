@@ -162,7 +162,9 @@ $(for svc in ${SERVICES_AUTOSTART:-}; do echo "rc-update add $svc default"; done
 "
 
 # Sudo config
+install -d -m0750 "$CHROOT/etc/sudoers.d"
 echo "${USERNAME} ALL=(ALL:ALL) NOPASSWD: ALL" > "$CHROOT/etc/sudoers.d/${USERNAME}"
+chmod 0440 "$CHROOT/etc/sudoers.d/${USERNAME}"
 
 # Docker install + configuration (profile-driven)
 if [ "$DOCKER_ENABLE" = "yes" ]; then

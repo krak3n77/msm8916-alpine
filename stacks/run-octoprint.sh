@@ -64,10 +64,8 @@ wget -q "https://github.com/Renaud11232/OctoPrint-Resource-Monitor/archive/refs/
     -O "$RESOURCE_MONITOR_ZIP_HOST"
 
 LED_STATUS_ZIP_HOST="$WORKDIR/plugins/octoprint-led-status/dist/OctoPrint-LedStatus-1.0.0.zip"
-if [ ! -f "$LED_STATUS_ZIP_HOST" ]; then
-    echo "[*] Building LED Status plugin zip..."
-    make -C "$WORKDIR" plugins
-fi
+echo "[*] Building LED Status plugin zip from tracked source..."
+make -C "$WORKDIR" plugins
 install -Dm0644 "$LED_STATUS_ZIP_HOST"                                         "$CHROOT/tmp/$(basename "$LED_STATUS_ZIP_HOST")"
 install -Dm0755 "$WORKDIR/plugins/octoprint-led-status/helper/led-helper"     "$CHROOT/tmp/led-helper"
 install -Dm0640 "$WORKDIR/plugins/octoprint-led-status/sudoers/octoprint-led" "$CHROOT/tmp/octoprint-led-sudoers"

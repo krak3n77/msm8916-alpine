@@ -28,8 +28,8 @@ pr_description.md
 HANDOFF.md
 issues/
 
-# Plugin build workspaces
-plugins/octoprint-network-settings/
+# Generated OctoPrint plugin artifacts
+plugins/*/dist/
 
 __pycache__/
 *.py[cod]

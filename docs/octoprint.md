@@ -41,6 +41,19 @@ plugins (OctoPrint-Dashboard, timelapse, etc.) on this device.
 
 Keep camera use to live monitoring first. Avoid timelapse unless idle RAM/CPU during real prints still looks safe.
 
+## Plugin source vs artifacts policy
+
+The repository keeps **plugin source** for the appliance-owned LED Status plugin under
+`plugins/octoprint-led-status/`.
+
+Generated plugin ZIPs under `plugins/*/dist/` are **not source-controlled release inputs**.
+They are treated as build outputs: the OctoPrint image build runs `make plugins` and installs the
+freshly built LED Status ZIP into the chroot. The tracked source, helper, and sudoers files are the
+authoritative inputs.
+
+The stray `plugins/octoprint-network-settings/` ZIP was reviewed and is not used by the appliance
+build, so it is not kept as a repository input.
+
 ## USB and WiFi — read this first
 
 The OctoPrint appliance uses its **single USB port** for the printer in **USB OTG host mode**.
@@ -149,8 +162,8 @@ OctoPrint is pre-installed when you build with `make octoprint`. The `stacks/run
 1. Installs Alpine system dependencies (`python3`, build headers)
 2. Creates the `octoprint` service user in the `dialout` group
 3. Installs OctoPrint into `/opt/octoprint/venv`
-4. Installs the Resource Monitor plugin (v0.4.0, pinned)
-5. Installs the LED Status plugin (v1.0.0, pinned) and its helper + sudoers rule
+4. Downloads the Resource Monitor plugin (v0.4.0, pinned)
+5. Builds the LED Status plugin ZIP from `plugins/octoprint-led-status/` and installs it with its helper + sudoers rule
 6. Enables the OpenRC service in the default runlevel
 7. Installs USB serial modules and the OTG host boot script
 

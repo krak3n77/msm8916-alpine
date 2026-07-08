@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 
 # ponytail: VM provisioning can miss deps after script changes; install only if needed.
 if ! command -v flex >/dev/null || ! command -v bison >/dev/null; then
-    sudo bash scripts/install_dependencies.sh
+    sudo bash scripts/build-deps.sh
 fi
 
 bash scripts/setup-kernel-build.sh

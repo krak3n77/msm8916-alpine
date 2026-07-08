@@ -60,13 +60,13 @@ else
     fail "OctoPrint profile should set USB_GADGET_OTG=\"yes\" to enable USB host path"
 fi
 
-if grep -q 'if \[ "$USB_GADGET_INSTALL" = "yes" \]' "$REPO/scripts/generate_alpine_rootfs.sh"; then
+if grep -q 'if \[ "$USB_GADGET_INSTALL" = "yes" \]' "$REPO/scripts/build-rootfs.sh"; then
     ok "Rootfs generator gates usb-gadget install on USB_GADGET_INSTALL"
 else
     fail "Rootfs generator installs usb-gadget unconditionally"
 fi
 
-if grep -q 'if \[ "$USB_GADGET_ENABLED" = "yes" \]' "$REPO/scripts/generate_alpine_rootfs.sh"; then
+if grep -q 'if \[ "$USB_GADGET_ENABLED" = "yes" \]' "$REPO/scripts/build-rootfs.sh"; then
     ok "Rootfs generator gates usb-gadget autostart on USB_GADGET_ENABLED"
 else
     fail "Rootfs generator starts usb-gadget unconditionally"
@@ -95,7 +95,7 @@ else
 fi
 
 if grep -q 'RESOURCE_MONITOR_ZIP=' "$REPO/stacks/install-octoprint.sh" \
-   && grep -q 'OctoPrint-Resource-Monitor.*zip' "$REPO/scripts/generate_alpine_rootfs.sh"; then
+   && grep -q 'OctoPrint-Resource-Monitor.*zip' "$REPO/stacks/run-octoprint.sh"; then
     ok "Appliance downloads Resource Monitor zip before chroot install"
 else
     fail "Appliance install is missing bundled Resource Monitor zip integration"
@@ -133,7 +133,7 @@ echo ""
 echo "-- 5. USB serial module artifacts --"
 _KERNEL_VER="6.12.1-msm8916"
 _ARTIFACT_DIR="$REPO/modules/octoprint-usb-serial/${_KERNEL_VER}"
-for _mod in ch341.ko usbserial.ko cdc-acm.ko; do
+for _mod in ch341.ko usbserial.ko cdc-acm.ko ftdi_sio.ko pl2303.ko; do
     if [ -f "$_ARTIFACT_DIR/$_mod" ]; then
         ok "USB module artifact present: ${_mod}"
     else
@@ -142,10 +142,10 @@ for _mod in ch341.ko usbserial.ko cdc-acm.ko; do
 done
 unset _KERNEL_VER _ARTIFACT_DIR _mod
 
-if grep -q 'octoprint-usb.start' "$REPO/scripts/generate_alpine_rootfs.sh" \
-    && grep -q 'echo host > "$ROLE"' "$REPO/scripts/generate_alpine_rootfs.sh" \
-    && grep -q 'modprobe ch341' "$REPO/scripts/generate_alpine_rootfs.sh" \
-    && grep -q 'modprobe cdc_acm' "$REPO/scripts/generate_alpine_rootfs.sh"; then
+if grep -q 'octoprint-usb.start' "$REPO/stacks/run-octoprint.sh" \
+    && grep -q 'echo host > "$ROLE"' "$REPO/stacks/run-octoprint.sh" \
+    && grep -q 'modprobe ch341' "$REPO/stacks/run-octoprint.sh" \
+    && grep -q 'modprobe cdc_acm' "$REPO/stacks/run-octoprint.sh"; then
     ok "OctoPrint image forces USB host mode and preloads serial modules at boot"
 else
     fail "OctoPrint image missing USB host/module boot setup"
@@ -155,21 +155,28 @@ fi
 echo ""
 echo "-- 6. LED status plugin --"
 
-_LS_ZIP="$REPO/plugins/octoprint-led-status/dist/OctoPrint-LedStatus-1.0.0.zip"
+_LS_SETUP="$REPO/plugins/octoprint-led-status/setup.py"
+_LS_PLUGIN="$REPO/plugins/octoprint-led-status/octoprint_led_status/__init__.py"
 _LS_HELPER="$REPO/plugins/octoprint-led-status/helper/led-helper"
 _LS_SUDOERS="$REPO/plugins/octoprint-led-status/sudoers/octoprint-led"
 
-if [ -f "$_LS_ZIP" ]; then
-    ok "LED Status plugin artifact present: plugins/octoprint-led-status/dist/OctoPrint-LedStatus-1.0.0.zip"
+if [ -f "$_LS_SETUP" ] && [ -f "$_LS_PLUGIN" ]; then
+    ok "LED Status plugin source is present under plugins/octoprint-led-status/"
 else
-    fail "LED Status plugin artifact missing: $_LS_ZIP"
+    fail "LED Status plugin source missing under plugins/octoprint-led-status/"
 fi
 
-if grep -q 'LED_STATUS_ZIP_HOST=' "$REPO/scripts/generate_alpine_rootfs.sh" \
-   && grep -q 'OctoPrint-LedStatus' "$REPO/scripts/generate_alpine_rootfs.sh"; then
-    ok "Rootfs generator bundles LED Status zip into chroot install"
+if grep -q 'make -C "\$WORKDIR" plugins' "$REPO/stacks/run-octoprint.sh" \
+   && grep -q 'LED_STATUS_ZIP_HOST=' "$REPO/stacks/run-octoprint.sh"; then
+    ok "OctoPrint stack rebuilds the LED Status plugin zip during image build"
 else
-    fail "Rootfs generator does not bundle LED Status zip"
+    fail "OctoPrint stack does not rebuild the LED Status plugin zip during image build"
+fi
+
+if [ ! -e "$REPO/plugins/octoprint-network-settings" ]; then
+    ok "Unused OctoPrint network-settings artifact is absent"
+else
+    fail "Unused OctoPrint network-settings artifact should not remain in the repo"
 fi
 
 if [ -f "$_LS_HELPER" ]; then
@@ -211,7 +218,7 @@ else
     fail "Helper missing red:power management"
 fi
 
-unset _LS_ZIP _LS_HELPER _LS_SUDOERS
+unset _LS_SETUP _LS_PLUGIN _LS_HELPER _LS_SUDOERS
 
 # ---- Summary --------------------------------------------------
 echo ""
@@ -228,11 +235,10 @@ cat <<'MANUAL'
      rc-service octoprint stop    && rc-service octoprint status   # expect: stopped
      rc-service octoprint start
 
-2. Installer reruns safely (no data wipe):
-     # While OctoPrint is installed, run the installer again:
-     sudo bash ~/install-octoprint.sh
-     # Expect: "already installed — skipping pip reinstall." then service/sudoers refresh
-     # Data dir /var/lib/octoprint is preserved; config.yaml only written if absent
+2. Profile build left a ready appliance (no post-boot installer script):
+     command -v octoprint                     # expect: /opt/octoprint/venv/bin/octoprint
+     ls -ld /opt/octoprint/venv /var/lib/octoprint
+     ls ~/install-octoprint.sh                # expect: No such file or directory
 
 3. Memory — compare free RAM before and after the OctoPrint DTB:
      # Boot with generic DTB (msm8916-yiming-uz801v3.dtb) and note:

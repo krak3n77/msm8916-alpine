@@ -14,8 +14,7 @@ dongle with constrained memory (~384 MB usable). Read this before installing.
 | Pre-installed plugins | Resource Monitor 0.4.0, LED Status 1.0.0 |
 | LTE modem | ✗ — disabled in the OctoPrint DTB profile to reclaim ~86 MB RAM |
 
-OctoPrint runs as a native OpenRC service under a dedicated `octoprint` user, installed via
-`install-octoprint.sh` into `/opt/octoprint/venv`.
+OctoPrint runs as a native OpenRC service under a dedicated `octoprint` user, pre-installed via the `octoprint` profile build into `/opt/octoprint/venv`. No post-boot installer script is left on the device.
 
 ## Memory layout
 
@@ -41,6 +40,19 @@ plugins (OctoPrint-Dashboard, timelapse, etc.) on this device.
   ```
 
 Keep camera use to live monitoring first. Avoid timelapse unless idle RAM/CPU during real prints still looks safe.
+
+## Plugin source vs artifacts policy
+
+The repository keeps **plugin source** for the appliance-owned LED Status plugin under
+`plugins/octoprint-led-status/`.
+
+Generated plugin ZIPs under `plugins/*/dist/` are **not source-controlled release inputs**.
+They are treated as build outputs: the OctoPrint image build runs `make plugins` and installs the
+freshly built LED Status ZIP into the chroot. The tracked source, helper, and sudoers files are the
+authoritative inputs.
+
+The stray `plugins/octoprint-network-settings/` ZIP was reviewed and is not used by the appliance
+build, so it is not kept as a repository input.
 
 ## USB and WiFi — read this first
 
@@ -71,8 +83,7 @@ dmesg | tail -20
 ls /dev/tty{USB,ACM}* 2>/dev/null
 ```
 
-The `octoprint` service user is added to the `dialout` group by `install-octoprint.sh` so it can
-open serial ports without root.
+The `octoprint` service user is added to the `dialout` group during the build so it can open serial ports without root.
 
 ## Kernel drivers for USB serial
 
@@ -146,22 +157,17 @@ free -m   # should show ~384 MB total
 
 ## Install
 
-Run after first boot, once WiFi is working and the OctoPrint DTB profile is active:
-
-```bash
-sudo ~/install-octoprint.sh
-```
-
-The script is idempotent — safe to rerun if interrupted. It:
+OctoPrint is pre-installed when you build with `make octoprint`. The `stacks/run-octoprint.sh` hook runs inside the chroot during the image build and:
 
 1. Installs Alpine system dependencies (`python3`, build headers)
-2. Creates the `octoprint` service user
-3. Fetches the latest OctoPrint release from PyPI into `/opt/octoprint/venv`
-4. Installs the Resource Monitor plugin (v0.4.0, pinned)
-5. Installs the LED Status plugin (v1.0.0, pinned) and its helper + sudoers rule
-6. Installs the OpenRC service and enables it in the default runlevel
+2. Creates the `octoprint` service user in the `dialout` group
+3. Installs OctoPrint into `/opt/octoprint/venv`
+4. Downloads the Resource Monitor plugin (v0.4.0, pinned)
+5. Builds the LED Status plugin ZIP from `plugins/octoprint-led-status/` and installs it with its helper + sudoers rule
+6. Enables the OpenRC service in the default runlevel
+7. Installs USB serial modules and the OTG host boot script
 
-Install takes **10–20 minutes** on the dongle (slow single-core pip build).
+No installer script is copied to the device. Flash the image and boot — OctoPrint starts automatically.
 
 ## Access
 
@@ -191,6 +197,47 @@ rc-service octoprint status
 
 # Logs
 tail -f /var/log/octoprint/octoprint.log
+```
+
+## Long-print health logging
+
+`print-health` is a diagnostic snapshot command installed at `/usr/local/sbin/print-health`. It writes one timestamped block to `/var/log/print-health.log` every 15 minutes via `/etc/periodic/15min/`. The log is capped at 2000 lines (~200 KB) by tail-rotation; it never triggers a reboot, watchdog, or any self-healing action — it is read-only observability.
+
+### Categories captured
+
+| Section | What is logged |
+|---|---|
+| `uptime/load` | `uptime` output — system age and 1/5/15-min load averages |
+| `memory` | `free -m` — RAM and zram swap usage |
+| `disk` | `df -h / /var/log` — root and log filesystem fill |
+| `thermal` | All `thermal_zone*/temp` entries — zone name, type, °C |
+| `kernel-errors` | Last 20 `dmesg` lines at err/crit/alert/emerg level |
+| `networking` | `ip -brief addr` + default route |
+| `usb-serial` | `/dev/ttyUSB*` and `/dev/ttyACM*` presence |
+| `octoprint-service` | `rc-service octoprint status` exit state |
+
+Every section is best-effort: a missing device or service prints `unavailable` and the script continues.
+
+### Inspect the log
+
+```bash
+# Tail the live log
+tail -f /var/log/print-health.log
+
+# Show the last snapshot
+awk '/^=== print-health/{buf=""} {buf=buf $0 "\n"} END{printf "%s",buf}' /var/log/print-health.log
+
+# Count snapshots collected
+grep -c '^=== print-health' /var/log/print-health.log
+
+# Show only thermal readings across all snapshots
+grep -A5 '--- thermal ---' /var/log/print-health.log
+
+# Show kernel errors across all snapshots
+grep -A20 '--- kernel-errors ---' /var/log/print-health.log | grep -v '^--$'
+
+# Run a snapshot manually right now
+/usr/local/sbin/print-health
 ```
 
 ## OctoPrint UI system commands
@@ -237,4 +284,4 @@ Resource Monitor is preinstalled. Confirm it is listed in Plugin Manager and its
 | OOM / service killed | `free -m`, `dmesg | grep -i oom` — disable heavy plugins, confirm OctoPrint DTB profile |
 | Modem still present | Wrong DTB loaded — check `extlinux.conf` FDT line |
 | LEDs not changing state | Check `/sys/class/leds/green:wan` and `/sys/class/leds/blue:wlan` exist; see [docs/led-status.md — Troubleshooting](led-status.md#troubleshooting) |
-| Install fails mid-way | Rerun `sudo ~/install-octoprint.sh` — idempotent |
+| OctoPrint missing after flash | Rebuild with `make octoprint` — confirm the build log shows `[*] Preinstalling OctoPrint...` |

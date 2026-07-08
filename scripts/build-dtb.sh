@@ -5,7 +5,7 @@ set -euo pipefail
 #   1. Sparse-checkouts kernel DTS (cached in .kernel-dts/)
 #   2. Compiles known upstream MSM8916 DTS files
 #   3. Compiles any user-provided DTS in dts/
-# Usage: ./scripts/generate_dts.sh <out_dir>
+# Usage: ./scripts/build-dtb.sh <out_dir>
 
 WORKDIR="$(pwd)"
 OUT_DIR="${1:-"$WORKDIR/files"}"
@@ -20,9 +20,9 @@ UPSTREAM_DTS=(
     "msm8916-thwc-ufi001c.dts"
 )
 
-command -v dtc  >/dev/null || { echo "ERROR: dtc not found. Run install_dependencies.sh"; exit 1; }
-command -v cpp  >/dev/null || { echo "ERROR: cpp not found. Run install_dependencies.sh"; exit 1; }
-command -v git  >/dev/null || { echo "ERROR: git not found. Run install_dependencies.sh"; exit 1; }
+command -v dtc  >/dev/null || { echo "ERROR: dtc not found. Run build-deps.sh"; exit 1; }
+command -v cpp  >/dev/null || { echo "ERROR: cpp not found. Run build-deps.sh"; exit 1; }
+command -v git  >/dev/null || { echo "ERROR: git not found. Run build-deps.sh"; exit 1; }
 
 mkdir -p "$DTB_OUT"
 

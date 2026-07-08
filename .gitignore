@@ -1,3 +1,4 @@
+# Build outputs and fetched artifacts
 *.raw
 *.bin
 *.zip
@@ -8,15 +9,27 @@ dist
 files
 mnt
 rootfs
+
+# Device partition dumps (edl save)
+saved/
+
+# VM state
+.vagrant
+kernel-build/
+
+# Local secrets — copy variables.env.example and fill in
 variables.env
+
+# Misc local/generated
 .kernel-dts/
 homer.yml
 pr_description.md
 *.prd.md
 HANDOFF.md
 issues/
-.vagrant
-kernel-build/
+
+# Generated OctoPrint plugin artifacts
+plugins/*/dist/
 
 __pycache__/
 *.py[cod]

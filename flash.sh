@@ -7,7 +7,7 @@
 
 set -euo pipefail
 
-# Must match TOT_SECTORS in generate_gpt_table.sh
+# Must match TOT_SECTORS in build-gpt.sh
 TOT_SECTORS=7634944
 
 # Parse arguments

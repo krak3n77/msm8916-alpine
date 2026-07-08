@@ -37,6 +37,10 @@ USB_GADGET_ENABLED="${USB_GADGET_ENABLED:-yes}"
 OCTOPRINT_PREINSTALL="${OCTOPRINT_PREINSTALL:-no}"
 ZORAXY_PREINSTALL="${ZORAXY_PREINSTALL:-no}"
 DOCKER_ENABLE="${DOCKER_ENABLE:-no}"
+STACKS="${STACKS:-}"
+# Profile-controlled additions (set in profiles/*.env, not here)
+PROFILE_PACKAGES="${PROFILE_PACKAGES:-}"
+PROFILE_SERVICES="${PROFILE_SERVICES:-}"
 
 # Required: password must be set
 [ -z "${PASSWORD:-}" ] && {
@@ -117,10 +121,17 @@ apk add --no-cache --no-interactive \
     ca-certificates
 "
 
-# Install extra packages from variables.env
+# Install profile-specific packages (profile contract — separate from base and user packages)
+if [ -n "${PROFILE_PACKAGES:-}" ]; then
+    _PPKG_LIST="$(echo "$PROFILE_PACKAGES" | tr '\n' ' ' | tr -s ' ')"
+    echo "[*] Installing profile packages (${PROFILE:-default}): ${_PPKG_LIST}"
+    chroot "$CHROOT" ash -l -c "apk add --no-cache --no-interactive ${_PPKG_LIST}"
+fi
+
+# Install extra packages from variables.env (user/local overrides)
 if [ -n "${PACKAGES:-}" ]; then
     _PKG_LIST="$(echo "$PACKAGES" | tr '\n' ' ' | tr -s ' ')"
-    echo "[*] Installing extra packages..."
+    echo "[*] Installing user packages..."
     chroot "$CHROOT" ash -l -c "apk add --no-cache --no-interactive ${_PKG_LIST}"
 fi
 
@@ -157,7 +168,10 @@ rc-update add networkmanager default
 rc-update add rmtfs default
 rc-update add local default
 
-# Enable extra services from variables.env
+# Enable profile-specific services (profile contract — separate from base and user services)
+$(for svc in ${PROFILE_SERVICES:-}; do echo "rc-update add $svc default"; done)
+
+# Enable extra services from variables.env (user/local overrides)
 $(for svc in ${SERVICES_AUTOSTART:-}; do echo "rc-update add $svc default"; done)
 "
 
@@ -334,90 +348,12 @@ swapon /dev/zram0
 EOF
 chmod +x "$CHROOT/etc/local.d/zram.start"
 
-# Optional OctoPrint appliance preinstall
-if [ "$OCTOPRINT_PREINSTALL" = "yes" ]; then
-    # --- USB serial modules (issue-005) ---
-    KERNEL_VER="6.12.1-msm8916"
-    USB_MOD_SRC="$(pwd)/modules/octoprint-usb-serial/${KERNEL_VER}"
-    USB_REQUIRED_MODS="ch341.ko usbserial.ko cdc-acm.ko"
-
-    # Fail clearly if required modules are missing
-    _missing=""
-    for _mod in $USB_REQUIRED_MODS; do
-        [ -f "$USB_MOD_SRC/$_mod" ] || _missing="$_missing $_mod"
-    done
-    if [ -n "$_missing" ]; then
-        echo "ERROR: Missing required USB serial modules for OctoPrint:${_missing}"
-        echo "       Expected in:       $USB_MOD_SRC/"
-        exit 1
-    fi
-
-    # Copy modules into rootfs under correct kernel/drivers subdirs
-    echo "[*] Installing USB serial modules (${KERNEL_VER})..."
-    USB_MOD_SERIAL="$CHROOT/lib/modules/${KERNEL_VER}/kernel/drivers/usb/serial"
-    USB_MOD_CLASS="$CHROOT/lib/modules/${KERNEL_VER}/kernel/drivers/usb/class"
-    mkdir -p "$USB_MOD_SERIAL" "$USB_MOD_CLASS"
-    for _mod in usbserial.ko ch341.ko ftdi_sio.ko pl2303.ko; do
-        [ -f "$USB_MOD_SRC/$_mod" ] && install -m0644 "$USB_MOD_SRC/$_mod" "$USB_MOD_SERIAL/"
-    done
-    [ -f "$USB_MOD_SRC/cdc-acm.ko" ] && install -m0644 "$USB_MOD_SRC/cdc-acm.ko" "$USB_MOD_CLASS/"
-
-    # Build module index so modprobe ch341 works on first boot
-    chroot "$CHROOT" depmod -a "${KERNEL_VER}"
-
-    # Force USB host mode and preload printer serial drivers at boot.
-    cat > "$CHROOT/etc/local.d/octoprint-usb.start" << 'EOF'
-#!/bin/sh
-ROLE=/sys/class/usb_role/ci_hdrc.0-role-switch/role
-for _ in 1 2 3 4 5; do
-    [ -w "$ROLE" ] && { echo host > "$ROLE"; break; }
-    sleep 1
+# Stack hooks — profile-driven via STACKS (see profiles/*.env and stacks/run-*.sh)
+for _stack in ${STACKS:-}; do
+    echo "[*] Running stack: $_stack"
+    CHROOT="$CHROOT" STAGING="$STAGING" WORKDIR="$WORKDIR" \
+        bash "$WORKDIR/stacks/run-${_stack}.sh"
 done
-modprobe usbserial 2>/dev/null || true
-modprobe ch341 2>/dev/null || true
-modprobe cdc_acm 2>/dev/null || true
-EOF
-    chmod +x "$CHROOT/etc/local.d/octoprint-usb.start"
-
-    echo "[*] Preinstalling OctoPrint..."
-    RESOURCE_MONITOR_VERSION="0.4.0"
-    RESOURCE_MONITOR_ZIP_HOST="$STAGING/OctoPrint-Resource-Monitor-${RESOURCE_MONITOR_VERSION}.zip"
-    wget -q "https://github.com/Renaud11232/OctoPrint-Resource-Monitor/archive/refs/tags/${RESOURCE_MONITOR_VERSION}.zip" -O "$RESOURCE_MONITOR_ZIP_HOST"
-
-    # LED Status zip: build if missing, then copy artifacts into chroot
-    LED_STATUS_ZIP_HOST="plugins/octoprint-led-status/dist/OctoPrint-LedStatus-1.0.0.zip"
-    if [ ! -f "$LED_STATUS_ZIP_HOST" ]; then
-        echo "[*] Building LED Status plugin zip..."
-        make -C "$(pwd)" plugins
-    fi
-    install -Dm0644 "$LED_STATUS_ZIP_HOST"                              "$CHROOT/tmp/$(basename "$LED_STATUS_ZIP_HOST")"
-    install -Dm0755 plugins/octoprint-led-status/helper/led-helper      "$CHROOT/tmp/led-helper"
-    install -Dm0640 plugins/octoprint-led-status/sudoers/octoprint-led  "$CHROOT/tmp/octoprint-led-sudoers"
-
-    install -Dm0755 stacks/install-octoprint.sh "$CHROOT/tmp/install-octoprint.sh"
-    install -Dm0644 "$RESOURCE_MONITOR_ZIP_HOST" "$CHROOT/tmp/$(basename "$RESOURCE_MONITOR_ZIP_HOST")"
-    chroot "$CHROOT" env \
-        RESOURCE_MONITOR_ZIP="/tmp/$(basename "$RESOURCE_MONITOR_ZIP_HOST")" \
-        LED_STATUS_ZIP="/tmp/$(basename "$LED_STATUS_ZIP_HOST")" \
-        LED_STATUS_HELPER="/tmp/led-helper" \
-        LED_STATUS_SUDOERS="/tmp/octoprint-led-sudoers" \
-        bash /tmp/install-octoprint.sh -y
-    chroot "$CHROOT" /opt/octoprint/venv/bin/pip show OctoPrint-Resource-Monitor >/dev/null
-    chroot "$CHROOT" /opt/octoprint/venv/bin/pip show OctoPrint-LedStatus >/dev/null
-    rm -rf "$CHROOT/tmp/install-octoprint.sh" \
-           "$CHROOT/tmp/$(basename "$RESOURCE_MONITOR_ZIP_HOST")" \
-           "$CHROOT/tmp/$(basename "$LED_STATUS_ZIP_HOST")" \
-           "$CHROOT/tmp/led-helper" \
-           "$CHROOT/tmp/octoprint-led-sudoers"
-fi
-
-# Optional Zoraxy appliance preinstall
-if [ "$ZORAXY_PREINSTALL" = "yes" ]; then
-    echo "[*] Preinstalling Zoraxy..."
-    install -Dm0755 stacks/install-zoraxy.sh "$CHROOT/tmp/install-zoraxy.sh"
-    chroot "$CHROOT" bash /tmp/install-zoraxy.sh
-    rm -f "$CHROOT/tmp/install-zoraxy.sh"
-fi
 
 # Create tarball
 echo "[*] Creating tarball..."
@@ -440,8 +376,7 @@ cp "$STAGING/alpine_rootfs.tgz" "$OUT_DIR/rootfs.tgz"
 echo "[+] OK: Alpine rootfs ready in $OUT_DIR (profile: ${PROFILE:-default})"
 echo "    - Kernel: linux-postmarketos-qcom-msm8916 from ${PMOS_RELEASE}"
 echo "    - Docker: ${DOCKER_ENABLE}"
-echo "    - OctoPrint preinstalled: ${OCTOPRINT_PREINSTALL}"
-echo "    - Zoraxy preinstalled: ${ZORAXY_PREINSTALL}"
+echo "    - Stacks: ${STACKS:-none}"
 echo "    - Chrony: enabled with NTP servers"
 echo "    - DTB: ${DTB_FILE}"
 echo "    - $OUT_DIR/rootfs/ (directory)"

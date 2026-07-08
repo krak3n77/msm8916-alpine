@@ -2,7 +2,7 @@
 # Setup kernel source tree for out-of-tree module builds against msm8916 pmaports kernel.
 # Pins pmaports v25.06; derives kernel version/tag from the official APKBUILD.
 # Run inside the builder VM (make builder) or any arm64/amd64 Linux box with
-# the required cross-build deps installed (see install_dependencies.sh).
+# the required cross-build deps installed (see build-deps.sh).
 #
 # Usage: sudo bash scripts/setup-kernel-build.sh
 #   Optional: copy /proc/config.gz from the device to kernel-build/device.config.gz

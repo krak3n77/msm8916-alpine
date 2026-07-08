@@ -1,7 +1,7 @@
 # LED Status — MSM8916 OctoPrint Appliance
 
 The LED Status plugin (v1.0.0) drives the dongle's two coloured LEDs to show
-OctoPrint printer state at a glance. It is preinstalled by `install-octoprint.sh`.
+OctoPrint printer state at a glance. It is pre-installed via the `octoprint` profile build.
 
 ## Hardware contract
 
@@ -42,9 +42,7 @@ The sudoers rule is narrowly scoped — it allows `octoprint` to run
 
 ## Live-device install / test
 
-Run on the appliance after `install-octoprint.sh` has completed (the installer
-handles all of this automatically; the steps below are for manual updates or
-re-installs):
+These steps are for manual updates or re-installs only. The `octoprint` profile build handles the initial deployment automatically.
 
 ```bash
 # 1. Copy plugin zip and helper to the device (from build host)
@@ -81,12 +79,6 @@ Confirm the plugin loaded in OctoPrint:
 ```
 
 ### Plugin removal and reinstall
-
-The installer is idempotent. Re-running `sudo ~/install-octoprint.sh` will:
-
-- Skip pip install if version `1.0.0` is already present.
-- Always overwrite `/usr/local/sbin/led-helper` (root-owned; safe to clobber).
-- Always overwrite `/etc/sudoers.d/octoprint-led`.
 
 To force a clean reinstall of the plugin only:
 

@@ -180,6 +180,8 @@ USB gadget tooling (`usb-gadget`, `/etc/usb-gadget.conf`) is installed and auto-
 
 > **Vagrant artifact flow:** Profile targets (`make octoprint`, `make docker`, `make zoraxy`) run `make build-all PROFILE=...` inside the VM or CI and do **not** call `make fetch`. After the build finishes, exit the VM and run `make fetch` on the host to copy artifacts. The host targets `make build-vm` / `make build-all-vm` handle the full cycle (up → build → fetch) automatically but are generic — they do not set a profile.
 
+See **[docs/profiles.md](docs/profiles.md)** for a full breakdown of what each profile installs, which services it enables, and how USB mode is set.
+
 ---
 
 **Option A — interactive shell inside the VM:**
@@ -267,49 +269,28 @@ The `stacks/` directory contains install scripts and Docker Compose files for op
 
 ### OctoPrint (3D printer interface)
 
-Native OctoPrint core for a Creality Ender-3 V3 SE (or similar USB-serial printer). No Docker, no webcam, no bundled plugins — designed for the ~384 MB RAM constraint. See **[docs/octoprint.md](docs/octoprint.md)** for the full guide including USB OTG host mode, WiFi prerequisites, serial device detection, memory tradeoffs, and troubleshooting.
-
-```bash
-sudo ~/install-octoprint.sh
-```
+Native OctoPrint core for a Creality Ender-3 V3 SE (or similar USB-serial printer). No Docker, no webcam — designed for the ~384 MB RAM constraint. Pre-installed by `make octoprint`. See **[docs/octoprint.md](docs/octoprint.md)** for build, flash, USB printer connectivity, serial drivers, and troubleshooting.
 
 - Web UI: `http://<device-ip>:5000`
 - Service: `rc-service octoprint start|stop|restart|status`
 - Logs: `/var/log/octoprint/octoprint.log`
 - Data: `/var/lib/octoprint`
-- DTB: use `msm8916-yiming-uz801v3-octoprint.dtb` to reclaim ~91 MB from unused LTE + video decode
+- DTB: use `msm8916-yiming-uz801v3-octoprint.dtb` to reclaim ~91 MB from LTE + video decode reserves
 
 ### Zoraxy (Reverse Proxy)
 
-Zoraxy provides a reverse proxy with HTTPS termination and a web admin panel. The `zoraxy` profile installs it as a **native service** (no Docker required). A Docker Compose file is also available if the `docker` profile is selected.
-
-**Native install (default for the `zoraxy` profile):**
-```bash
-sudo ~/install-zoraxy.sh
-```
+Reverse proxy with HTTPS termination and web admin panel. Pre-installed as a native service by `make zoraxy`. A Docker Compose file is also available under `stacks/` for `docker` profile builds.
 
 - Admin panel: `http://<device-ip>:8000`
 - Config: `/opt/zoraxy/config/`
 - Service: `rc-service zoraxy start|stop|restart`
 
-**Docker install:**
-```bash
-docker compose -f stacks/zoraxy.docker-compose.yml up -d
-```
-
 ### Homer (Dashboard)
 
-Homer is a lightweight static homepage served by Zoraxy's built-in web server.
-
-```bash
-sudo ~/install-homer.sh
-```
+Lightweight static homepage served by Zoraxy. Copy `stacks/install-homer.sh` to the device and run it after the `zoraxy` profile is up.
 
 - Installs to `/opt/homer/html/`
-- Automatically configures Zoraxy to serve it via `-webroot`
 - Config: `/opt/homer/html/assets/config.yml`
-
-Re-run the script to update to the latest Homer release. User config is preserved on updates.
 
 ### Portainer (Docker UI)
 
@@ -327,210 +308,6 @@ docker compose -f stacks/watchtower.docker-compose.yml up -d
 
 - Checks for container updates daily at 04:00
 - Automatically pulls and restarts updated containers
-
-## Components
-
-### USB Gadget
-
-The device exposes itself as a USB network adapter when connected to a PC.
-
-**Default configuration:**
-- **Interface**: usb0
-- **IP**: 192.168.42.1/24
-- **DHCP**: NetworkManager shared connection (192.168.42.10-100)
-- **Mode**: NCM (Linux/Mac) or RNDIS (Windows)
-- **MAC addresses**: Auto-generated from machine-id
-- **No default route**: Host traffic stays on primary network
-
-**Features:**
-- Plug-and-play networking
-- Automatic DHCP without extra dnsmasq
-- No bridge complexity
-- Doesn't steal host's default route
-- Switchable NCM/RNDIS modes
-- OTG Host mode support
-
-**Service control:**
-```bash
-# Start/stop/restart
-rc-service usb-gadget start|stop|restart
-
-# Check status and current mode
-usb-gadget status
-
-# Switch modes
-usb-gadget enable_ncm    # Linux/Mac
-usb-gadget disable_ncm   # Windows (RNDIS)
-usb-gadget enable_otg    # USB Host mode
-```
-
-### Network Configuration
-
-**USB Networking (usb0):**
-- **Method**: NetworkManager shared connection
-- **IP**: 192.168.42.1/24
-- **DHCP Range**: 192.168.42.10-192.168.42.100
-- **Gateway**: Not advertised (host keeps existing default route)
-
-NetworkManager configuration in `/etc/NetworkManager/system-connections/usb0.nmconnection`:
-```ini
-[connection]
-id=usb0
-type=ethernet
-interface-name=usb0
-autoconnect=true
-
-[ipv4]
-method=shared
-address1=192.168.42.1/24
-never-default=true
-
-[ipv6]
-method=disabled
-```
-
-**WiFi (wlan0):**
-- Managed by NetworkManager
-- Auto-connects on boot
-- Configuration in `/etc/NetworkManager/system-connections/wlan.nmconnection`
-
-**LTE (wwan0qmi0):**
-- Managed by ModemManager
-- Configuration in `/etc/NetworkManager/system-connections/lte.nmconnection`
-
-### Docker
-
-Pre-installed and configured with overlay2 storage driver.
-
-**User permissions:**
-- User added to `docker` group (no sudo required)
-
-**Configuration:** `/etc/docker/daemon.json`
-```json
-{
-  "log-driver": "json-file",
-  "log-opts": {
-    "max-size": "10m",
-    "max-file": "3"
-  },
-  "storage-driver": "overlay2",
-  "iptables": true
-}
-```
-
-**Usage:**
-```bash
-docker --version
-docker run hello-world
-docker ps -a
-```
-
-### zram Swap
-
-A 256MB compressed in-RAM swap device is configured automatically at boot via `/etc/local.d/zram.start`. This uses the lz4 algorithm and effectively provides ~256MB of extra memory headroom on constrained devices.
-
-### LTE Modem
-
-ModemManager with QMI support for cellular connectivity.
-
-**Service:** `modemmanager` + `rmtfs`
-
-**Check status:**
-```bash
-# List modems
-mmcli -L
-
-# Get modem details
-mmcli -m 0
-
-# Check connection
-mmcli -m 0 --simple-status
-```
-
-**Manual connection:**
-```bash
-nmcli connection up lte
-ip addr show wwan0qmi0
-```
-
-### SSH Access
-
-Dropbear SSH server on port 22.
-
-**Default credentials:**
-- Username: `user` (or configured in variables.env)
-- Password: configured in variables.env
-- Sudo: NOPASSWD enabled
-
-**Connect:**
-```bash
-# Via WiFi
-ssh user@192.168.77.XXX
-
-# Via USB
-ssh user@192.168.42.1
-```
-
-## USB Gadget Modes
-
-### NCM Mode (Default)
-
-**Best for:** Linux and macOS
-
-- High performance
-- Native driver support in Linux 2.6.31+, macOS 10.9+
-- No driver installation needed
-
-**Enable:**
-```bash
-usb-gadget enable_ncm
-rc-service usb-gadget restart
-```
-
-### RNDIS Mode
-
-**Best for:** Windows
-
-- Native Windows driver support
-- Plug-and-play on Windows 7+
-
-**Enable:**
-```bash
-usb-gadget disable_ncm
-rc-service usb-gadget restart
-```
-
-### OTG Host Mode
-
-**Best for:** USB peripherals (flash drives, keyboards, etc.)
-
-- Enables USB host functionality
-- Disables USB gadget mode
-- Requires USB OTG adapter
-
-**Enable:**
-```bash
-usb-gadget enable_otg
-rc-service usb-gadget restart
-```
-
-> **Warning:** WiFi or LTE connectivity required for remote access when in OTG mode.
-
-## First Boot
-
-On first boot, the system will automatically:
-
-1. Expand rootfs partition to fill eMMC
-2. Resize ext4 filesystem
-3. Start all services (NetworkManager, Docker, ModemManager, etc.)
-4. Connect to configured WiFi
-5. Create USB gadget (NCM interface)
-6. Configure usb0 with IP 192.168.42.1/24
-7. Start DHCP server on usb0
-8. Enable zram swap
-9. Sync time via Chrony (if installed)
-
-**Boot time:** ~30-45 seconds to full network connectivity
 
 ## Profile Validation
 

@@ -2,7 +2,7 @@
 
 ## What is built
 
-`scripts/build-usb-modules.sh` compiles these in-tree modules against the
+`scripts/build-modules.sh` (via `make kernel-modules`) compiles these in-tree modules against the
 prepared msm8916 kernel build environment (see `scripts/setup-kernel-build.sh`):
 
 | Module | Driver |
@@ -46,7 +46,7 @@ modprobe ch341
 make kernel-env          # runs setup-kernel-build.sh
 
 # 2. Build USB modules
-make kernel-modules      # runs build-usb-modules.sh
+make kernel-modules      # runs build-modules.sh
 
 # 3. Validate environment (works on macOS too, skips compile checks)
 make kernel-env-check

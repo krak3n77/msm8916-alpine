@@ -1,7 +1,7 @@
 .PHONY: builder build-vm build-all-vm fetch dts _check-env clean build build-all \
         octoprint docker zoraxy verify-octoprint \
         kernel-env-check modules kernel-env kernel-modules \
-        plugins deploy-led
+        plugins deploy-led check-clean
 
 # ponytail: pass PROFILE=<name> on the make command line, e.g. make build PROFILE=octoprint
 export PROFILE ?=
@@ -85,6 +85,11 @@ plugins:
 	@echo "[+] plugins/octoprint-led-status/dist/OctoPrint-LedStatus-1.0.0.zip"
 
 # ponytail: live-device install — make deploy-led HOST=root@<device-ip>
+# Verify no generated artifacts leak into tracked/untracked state
+check-clean:
+	@dirty=$$(git status --porcelain); \
+	 [ -z "$$dirty" ] && echo "[ok] working tree clean" || { echo "[fail] unexpected files:"; echo "$$dirty"; exit 1; }
+
 deploy-led: plugins
 	@tmp=$$(mktemp -d); \
 	  cp plugins/octoprint-led-status/dist/OctoPrint-LedStatus-1.0.0.zip $$tmp/; \

@@ -30,7 +30,7 @@ Vagrant.configure("2") do |config|
   config.vm.provision "shell", inline: <<-SHELL
     export DEBIAN_FRONTEND=noninteractive
     cd /app
-    chmod +x scripts/install_dependencies.sh
-    TARGETARCH=$(dpkg --print-architecture) scripts/install_dependencies.sh
+    chmod +x scripts/build-deps.sh
+    TARGETARCH=$(dpkg --print-architecture) scripts/build-deps.sh
   SHELL
 end

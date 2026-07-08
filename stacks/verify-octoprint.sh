@@ -60,13 +60,13 @@ else
     fail "OctoPrint profile should set USB_GADGET_OTG=\"yes\" to enable USB host path"
 fi
 
-if grep -q 'if \[ "$USB_GADGET_INSTALL" = "yes" \]' "$REPO/scripts/generate_alpine_rootfs.sh"; then
+if grep -q 'if \[ "$USB_GADGET_INSTALL" = "yes" \]' "$REPO/scripts/build-rootfs.sh"; then
     ok "Rootfs generator gates usb-gadget install on USB_GADGET_INSTALL"
 else
     fail "Rootfs generator installs usb-gadget unconditionally"
 fi
 
-if grep -q 'if \[ "$USB_GADGET_ENABLED" = "yes" \]' "$REPO/scripts/generate_alpine_rootfs.sh"; then
+if grep -q 'if \[ "$USB_GADGET_ENABLED" = "yes" \]' "$REPO/scripts/build-rootfs.sh"; then
     ok "Rootfs generator gates usb-gadget autostart on USB_GADGET_ENABLED"
 else
     fail "Rootfs generator starts usb-gadget unconditionally"
@@ -95,7 +95,7 @@ else
 fi
 
 if grep -q 'RESOURCE_MONITOR_ZIP=' "$REPO/stacks/install-octoprint.sh" \
-   && grep -q 'OctoPrint-Resource-Monitor.*zip' "$REPO/scripts/generate_alpine_rootfs.sh"; then
+   && grep -q 'OctoPrint-Resource-Monitor.*zip' "$REPO/scripts/build-rootfs.sh"; then
     ok "Appliance downloads Resource Monitor zip before chroot install"
 else
     fail "Appliance install is missing bundled Resource Monitor zip integration"
@@ -142,10 +142,10 @@ for _mod in ch341.ko usbserial.ko cdc-acm.ko; do
 done
 unset _KERNEL_VER _ARTIFACT_DIR _mod
 
-if grep -q 'octoprint-usb.start' "$REPO/scripts/generate_alpine_rootfs.sh" \
-    && grep -q 'echo host > "$ROLE"' "$REPO/scripts/generate_alpine_rootfs.sh" \
-    && grep -q 'modprobe ch341' "$REPO/scripts/generate_alpine_rootfs.sh" \
-    && grep -q 'modprobe cdc_acm' "$REPO/scripts/generate_alpine_rootfs.sh"; then
+if grep -q 'octoprint-usb.start' "$REPO/scripts/build-rootfs.sh" \
+    && grep -q 'echo host > "$ROLE"' "$REPO/scripts/build-rootfs.sh" \
+    && grep -q 'modprobe ch341' "$REPO/scripts/build-rootfs.sh" \
+    && grep -q 'modprobe cdc_acm' "$REPO/scripts/build-rootfs.sh"; then
     ok "OctoPrint image forces USB host mode and preloads serial modules at boot"
 else
     fail "OctoPrint image missing USB host/module boot setup"
@@ -165,8 +165,8 @@ else
     fail "LED Status plugin artifact missing: $_LS_ZIP"
 fi
 
-if grep -q 'LED_STATUS_ZIP_HOST=' "$REPO/scripts/generate_alpine_rootfs.sh" \
-   && grep -q 'OctoPrint-LedStatus' "$REPO/scripts/generate_alpine_rootfs.sh"; then
+if grep -q 'LED_STATUS_ZIP_HOST=' "$REPO/scripts/build-rootfs.sh" \
+   && grep -q 'OctoPrint-LedStatus' "$REPO/scripts/build-rootfs.sh"; then
     ok "Rootfs generator bundles LED Status zip into chroot install"
 else
     fail "Rootfs generator does not bundle LED Status zip"

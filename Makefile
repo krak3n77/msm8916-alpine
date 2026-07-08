@@ -1,4 +1,4 @@
-.PHONY: builder build-vm build-all-vm fetch dts _check-env clean build build-all \
+.PHONY: builder build-vm build-all-vm fetch dts install-deps _check-env clean build build-all \
         octoprint docker zoraxy verify-octoprint \
         kernel-env-check modules kernel-env kernel-modules \
         plugins deploy-led check-clean
@@ -33,7 +33,10 @@ fetch:
 	@ls -lh files/
 
 dts:
-	./scripts/generate_dts.sh ./files
+	./scripts/build-dtb.sh ./files
+
+install-deps:
+	sudo sh -e scripts/build-deps.sh
 
 _check-env:
 	@systemd-detect-virt -q 2>/dev/null || [ -f /proc/1/cgroup ] || { echo "ERROR: Run this inside the builder VM (make builder) or a CI environment"; exit 1; }
@@ -44,13 +47,13 @@ clean: _check-env
 build: _check-env
 	rm -rf files
 	mkdir -p files
-	./scripts/generate_dts.sh ./files
-	./scripts/generate_alpine_rootfs.sh ./files
-	./scripts/generate_images.sh ./files
+	./scripts/build-dtb.sh ./files
+	./scripts/build-rootfs.sh ./files
+	./scripts/build-images.sh ./files
 
 build-all: build
-	./scripts/generate_firmware.sh files/firmware.zip
-	./scripts/generate_gpt_table.sh files/gpt_both0.bin
+	./scripts/build-firmware.sh files/firmware.zip
+	./scripts/build-gpt.sh files/gpt_both0.bin
 
 # ponytail: static aliases — add new profile here when profiles/*.env grows
 octoprint: _check-env
@@ -70,7 +73,7 @@ kernel-env-check:
 	bash scripts/validate-kernel-env.sh
 
 modules: _check-env
-	bash scripts/make_modules.sh
+	bash scripts/build-modules.sh
 
 kernel-env: _check-env
 	bash scripts/setup-kernel-build.sh

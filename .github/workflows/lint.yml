@@ -1,0 +1,28 @@
+name: Lint
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  shell-syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax check
+        run: bash -n scripts/build-*.sh scripts/build-usb-modules.sh
+
+  makefile-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dry-run public build targets
+        run: |
+          make -n build
+          make -n build-all
+          make -n octoprint
+          make -n docker
+          make -n zoraxy

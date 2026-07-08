@@ -1,7 +1,7 @@
 .PHONY: builder build-vm build-all-vm fetch dts install-deps _check-env clean build build-all \
         octoprint docker zoraxy verify-octoprint \
         kernel-env-check modules kernel-env kernel-modules \
-        plugins deploy-led check-clean
+        plugins deploy-led check-clean check-profiles
 
 # ponytail: pass PROFILE=<name> on the make command line, e.g. make build PROFILE=octoprint
 export PROFILE ?=
@@ -67,6 +67,9 @@ zoraxy: _check-env
 
 verify-octoprint:
 	./stacks/verify-octoprint.sh
+
+check-profiles:
+	bash scripts/check-profiles.sh
 
 # USB serial modules for OctoPrint
 kernel-env-check:

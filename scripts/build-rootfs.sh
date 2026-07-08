@@ -37,6 +37,9 @@ USB_GADGET_ENABLED="${USB_GADGET_ENABLED:-yes}"
 OCTOPRINT_PREINSTALL="${OCTOPRINT_PREINSTALL:-no}"
 ZORAXY_PREINSTALL="${ZORAXY_PREINSTALL:-no}"
 DOCKER_ENABLE="${DOCKER_ENABLE:-no}"
+# Profile-controlled additions (set in profiles/*.env, not here)
+PROFILE_PACKAGES="${PROFILE_PACKAGES:-}"
+PROFILE_SERVICES="${PROFILE_SERVICES:-}"
 
 # Required: password must be set
 [ -z "${PASSWORD:-}" ] && {
@@ -117,10 +120,17 @@ apk add --no-cache --no-interactive \
     ca-certificates
 "
 
-# Install extra packages from variables.env
+# Install profile-specific packages (profile contract — separate from base and user packages)
+if [ -n "${PROFILE_PACKAGES:-}" ]; then
+    _PPKG_LIST="$(echo "$PROFILE_PACKAGES" | tr '\n' ' ' | tr -s ' ')"
+    echo "[*] Installing profile packages (${PROFILE:-default}): ${_PPKG_LIST}"
+    chroot "$CHROOT" ash -l -c "apk add --no-cache --no-interactive ${_PPKG_LIST}"
+fi
+
+# Install extra packages from variables.env (user/local overrides)
 if [ -n "${PACKAGES:-}" ]; then
     _PKG_LIST="$(echo "$PACKAGES" | tr '\n' ' ' | tr -s ' ')"
-    echo "[*] Installing extra packages..."
+    echo "[*] Installing user packages..."
     chroot "$CHROOT" ash -l -c "apk add --no-cache --no-interactive ${_PKG_LIST}"
 fi
 
@@ -157,7 +167,10 @@ rc-update add networkmanager default
 rc-update add rmtfs default
 rc-update add local default
 
-# Enable extra services from variables.env
+# Enable profile-specific services (profile contract — separate from base and user services)
+$(for svc in ${PROFILE_SERVICES:-}; do echo "rc-update add $svc default"; done)
+
+# Enable extra services from variables.env (user/local overrides)
 $(for svc in ${SERVICES_AUTOSTART:-}; do echo "rc-update add $svc default"; done)
 "
 

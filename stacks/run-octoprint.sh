@@ -49,6 +49,13 @@ modprobe cdc_acm 2>/dev/null || true
 EOF
 chmod +x "$CHROOT/etc/local.d/octoprint-usb.start"
 
+# --- Health logging (issue-007) ---
+echo "[*] Installing print-health..."
+install -Dm0755 "$WORKDIR/configs/health/print-health.sh"  "$CHROOT/usr/local/sbin/print-health"
+mkdir -p "$CHROOT/etc/periodic/15min"
+install -Dm0755 "$WORKDIR/configs/health/print-health-log" "$CHROOT/etc/periodic/15min/print-health-log"
+chroot "$CHROOT" rc-update add crond default
+
 # --- OctoPrint install ---
 echo "[*] Preinstalling OctoPrint..."
 RESOURCE_MONITOR_VERSION="0.4.0"

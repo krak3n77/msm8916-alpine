@@ -11,7 +11,7 @@ check_profile() {
     # Reset all contract vars so stale state doesn't mask missing keys
     unset USB_GADGET_INSTALL USB_GADGET_ENABLED USB_GADGET_OTG \
           OCTOPRINT_PREINSTALL ZORAXY_PREINSTALL DOCKER_ENABLE \
-          PROFILE_PACKAGES PROFILE_SERVICES 2>/dev/null || true
+          PROFILE_PACKAGES PROFILE_SERVICES STACKS 2>/dev/null || true
     # Load order: base defaults → named profile
     # shellcheck source=/dev/null
     source "$PROFILES_DIR/default.env"
@@ -42,6 +42,7 @@ check_profile default \
     OCTOPRINT_PREINSTALL=no \
     ZORAXY_PREINSTALL=no \
     DOCKER_ENABLE=no \
+    STACKS="" \
     PROFILE_PACKAGES="" \
     PROFILE_SERVICES=""
 
@@ -51,52 +52,86 @@ check_profile octoprint \
     USB_GADGET_ENABLED=no \
     USB_GADGET_OTG=yes \
     DOCKER_ENABLE=no \
-    ZORAXY_PREINSTALL=no
+    ZORAXY_PREINSTALL=no \
+    STACKS=octoprint
 
 check_profile docker \
     DOCKER_ENABLE=yes \
     OCTOPRINT_PREINSTALL=no \
-    ZORAXY_PREINSTALL=no
+    ZORAXY_PREINSTALL=no \
+    STACKS=""
 
 check_profile zoraxy \
     ZORAXY_PREINSTALL=yes \
     OCTOPRINT_PREINSTALL=no \
-    DOCKER_ENABLE=no
+    DOCKER_ENABLE=no \
+    STACKS=zoraxy
 
-# --- OctoPrint install-path wiring check ---
-echo "[*] Checking OctoPrint install path wiring..."
+# --- Stack module wiring checks ---
+echo "[*] Checking stack module wiring..."
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 WIRE_OK=1
+BUILD_ROOTFS="$ROOT_DIR/scripts/build-rootfs.sh"
 
-# stacks/install-octoprint.sh must exist and be executable
+# build-rootfs.sh must use the generic STACKS loop, not hardcoded preinstall blocks
+if grep -q 'for _stack in.*STACKS' "$BUILD_ROOTFS"; then
+    echo "  OK   build-rootfs.sh uses generic STACKS loop"
+else
+    echo "  FAIL build-rootfs.sh missing generic STACKS loop"
+    WIRE_OK=0; FAIL=1
+fi
+if grep -q 'OCTOPRINT_PREINSTALL.*yes.*then' "$BUILD_ROOTFS" || \
+   grep -q 'ZORAXY_PREINSTALL.*yes.*then' "$BUILD_ROOTFS"; then
+    echo "  FAIL build-rootfs.sh still has hardcoded preinstall blocks"
+    WIRE_OK=0; FAIL=1
+fi
+
+# stacks/run-octoprint.sh must exist, be executable, and reference USB serial modules
+if [ -x "$ROOT_DIR/stacks/run-octoprint.sh" ]; then
+    echo "  OK   stacks/run-octoprint.sh exists and is executable"
+else
+    echo "  FAIL stacks/run-octoprint.sh missing or not executable"
+    WIRE_OK=0; FAIL=1
+fi
 if [ -x "$ROOT_DIR/stacks/install-octoprint.sh" ]; then
     echo "  OK   stacks/install-octoprint.sh exists and is executable"
 else
     echo "  FAIL stacks/install-octoprint.sh missing or not executable"
     WIRE_OK=0; FAIL=1
 fi
-
-# build-rootfs.sh must reference install-octoprint.sh inside OCTOPRINT_PREINSTALL guard
-BUILD_ROOTFS="$ROOT_DIR/scripts/build-rootfs.sh"
-if grep -q 'OCTOPRINT_PREINSTALL.*yes' "$BUILD_ROOTFS" && \
-   grep -q 'install-octoprint.sh' "$BUILD_ROOTFS"; then
-    echo "  OK   build-rootfs.sh wires OCTOPRINT_PREINSTALL → install-octoprint.sh"
-else
-    echo "  FAIL build-rootfs.sh missing OCTOPRINT_PREINSTALL guard or install-octoprint.sh reference"
-    WIRE_OK=0; FAIL=1
-fi
-
-# All 5 USB serial modules must be referenced in build-rootfs.sh
+RUN_OCTOPRINT="$ROOT_DIR/stacks/run-octoprint.sh"
 for _mod in cdc-acm ch341 ftdi_sio pl2303 usbserial; do
-    if grep -q "${_mod}" "$BUILD_ROOTFS"; then
-        echo "  OK   ${_mod} referenced in build-rootfs.sh"
+    if grep -q "${_mod}" "$RUN_OCTOPRINT"; then
+        echo "  OK   ${_mod} referenced in run-octoprint.sh"
     else
-        echo "  FAIL ${_mod} not referenced in build-rootfs.sh"
+        echo "  FAIL ${_mod} not referenced in run-octoprint.sh"
         WIRE_OK=0; FAIL=1
     fi
 done
 
-[ "$WIRE_OK" = 1 ] && echo "  OK   [octoprint-install-path]"
+# stacks/run-zoraxy.sh and stacks/install-zoraxy.sh must exist and be executable
+if [ -x "$ROOT_DIR/stacks/run-zoraxy.sh" ]; then
+    echo "  OK   stacks/run-zoraxy.sh exists and is executable"
+else
+    echo "  FAIL stacks/run-zoraxy.sh missing or not executable"
+    WIRE_OK=0; FAIL=1
+fi
+if [ -f "$ROOT_DIR/stacks/install-zoraxy.sh" ]; then
+    echo "  OK   stacks/install-zoraxy.sh exists"
+else
+    echo "  FAIL stacks/install-zoraxy.sh missing"
+    WIRE_OK=0; FAIL=1
+fi
+
+# stacks/install-homer.sh must exist
+if [ -f "$ROOT_DIR/stacks/install-homer.sh" ]; then
+    echo "  OK   stacks/install-homer.sh exists"
+else
+    echo "  FAIL stacks/install-homer.sh missing"
+    WIRE_OK=0; FAIL=1
+fi
+
+[ "$WIRE_OK" = 1 ] && echo "  OK   [stack-module-wiring]"
 
 if [ "$FAIL" = 0 ]; then
     echo "[+] All profile checks passed"

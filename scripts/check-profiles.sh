@@ -63,6 +63,41 @@ check_profile zoraxy \
     OCTOPRINT_PREINSTALL=no \
     DOCKER_ENABLE=no
 
+# --- OctoPrint install-path wiring check ---
+echo "[*] Checking OctoPrint install path wiring..."
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+WIRE_OK=1
+
+# stacks/install-octoprint.sh must exist and be executable
+if [ -x "$ROOT_DIR/stacks/install-octoprint.sh" ]; then
+    echo "  OK   stacks/install-octoprint.sh exists and is executable"
+else
+    echo "  FAIL stacks/install-octoprint.sh missing or not executable"
+    WIRE_OK=0; FAIL=1
+fi
+
+# build-rootfs.sh must reference install-octoprint.sh inside OCTOPRINT_PREINSTALL guard
+BUILD_ROOTFS="$ROOT_DIR/scripts/build-rootfs.sh"
+if grep -q 'OCTOPRINT_PREINSTALL.*yes' "$BUILD_ROOTFS" && \
+   grep -q 'install-octoprint.sh' "$BUILD_ROOTFS"; then
+    echo "  OK   build-rootfs.sh wires OCTOPRINT_PREINSTALL → install-octoprint.sh"
+else
+    echo "  FAIL build-rootfs.sh missing OCTOPRINT_PREINSTALL guard or install-octoprint.sh reference"
+    WIRE_OK=0; FAIL=1
+fi
+
+# All 5 USB serial modules must be referenced in build-rootfs.sh
+for _mod in cdc-acm ch341 ftdi_sio pl2303 usbserial; do
+    if grep -q "${_mod}" "$BUILD_ROOTFS"; then
+        echo "  OK   ${_mod} referenced in build-rootfs.sh"
+    else
+        echo "  FAIL ${_mod} not referenced in build-rootfs.sh"
+        WIRE_OK=0; FAIL=1
+    fi
+done
+
+[ "$WIRE_OK" = 1 ] && echo "  OK   [octoprint-install-path]"
+
 if [ "$FAIL" = 0 ]; then
     echo "[+] All profile checks passed"
 else

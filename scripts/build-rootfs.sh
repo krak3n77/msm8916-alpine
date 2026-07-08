@@ -352,7 +352,7 @@ if [ "$OCTOPRINT_PREINSTALL" = "yes" ]; then
     # --- USB serial modules (issue-005) ---
     KERNEL_VER="6.12.1-msm8916"
     USB_MOD_SRC="$(pwd)/modules/octoprint-usb-serial/${KERNEL_VER}"
-    USB_REQUIRED_MODS="ch341.ko usbserial.ko cdc-acm.ko"
+    USB_REQUIRED_MODS="ch341.ko usbserial.ko cdc-acm.ko ftdi_sio.ko pl2303.ko"
 
     # Fail clearly if required modules are missing
     _missing=""
@@ -371,7 +371,7 @@ if [ "$OCTOPRINT_PREINSTALL" = "yes" ]; then
     USB_MOD_CLASS="$CHROOT/lib/modules/${KERNEL_VER}/kernel/drivers/usb/class"
     mkdir -p "$USB_MOD_SERIAL" "$USB_MOD_CLASS"
     for _mod in usbserial.ko ch341.ko ftdi_sio.ko pl2303.ko; do
-        [ -f "$USB_MOD_SRC/$_mod" ] && install -m0644 "$USB_MOD_SRC/$_mod" "$USB_MOD_SERIAL/"
+        install -m0644 "$USB_MOD_SRC/$_mod" "$USB_MOD_SERIAL/"
     done
     [ -f "$USB_MOD_SRC/cdc-acm.ko" ] && install -m0644 "$USB_MOD_SRC/cdc-acm.ko" "$USB_MOD_CLASS/"
 
@@ -388,6 +388,8 @@ for _ in 1 2 3 4 5; do
 done
 modprobe usbserial 2>/dev/null || true
 modprobe ch341 2>/dev/null || true
+modprobe ftdi_sio 2>/dev/null || true
+modprobe pl2303 2>/dev/null || true
 modprobe cdc_acm 2>/dev/null || true
 EOF
     chmod +x "$CHROOT/etc/local.d/octoprint-usb.start"

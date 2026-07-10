@@ -23,8 +23,8 @@ STAGING="$(mktemp -d)"
 CHROOT="$STAGING/rootfs"
 
 HOST_NAME="${HOST_NAME:-uz801a}"
-RELEASE="${RELEASE:-v3.21}"
-PMOS_RELEASE="${PMOS_RELEASE:-v25.06}"
+RELEASE="${RELEASE:-v3.24}"
+PMOS_RELEASE="${PMOS_RELEASE:-v26.06}"
 MIRROR="${MIRROR:-http://dl-cdn.alpinelinux.org/alpine}"
 PMOS_MIRROR="${PMOS_MIRROR:-http://mirror.postmarketos.org/postmarketos}"
 

@@ -202,7 +202,8 @@ fi
 
 # Chrony configuration
 echo "[*] Configuring Chrony..."
-cat > "$CHROOT/etc/chrony/chrony.conf" <<'CHRONYEOF'
+mkdir -p "$CHROOT/etc/chrony"
+cat > "$CHROOT/etc/chrony/chrony.conf" << CHRONYEOF
 # NTP servers
 server 0.pool.ntp.org iburst
 server 1.pool.ntp.org iburst

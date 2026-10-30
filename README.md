@@ -52,8 +52,8 @@ USB0_IP="192.168.42.1/24"   # Static IP for USB gadget (with DHCP server)
 # Optional mirror overrides
 RELEASE="v3.24"
 PMOS_RELEASE="v26.06"
-# MIRROR="http://dl-cdn.alpinelinux.org/alpine"
-# PMOS_MIRROR="http://mirror.postmarketos.org/postmarketos"
+# MIRROR="https://dl-cdn.alpinelinux.org/alpine"
+# PMOS_MIRROR="https://mirror.nura.eco/postmarketos"
 
 # Extra packages to install (essentials are hardcoded in the script)
 PACKAGES="

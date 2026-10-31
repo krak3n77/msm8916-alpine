@@ -183,8 +183,8 @@ chmod 0440 "$CHROOT/etc/sudoers.d/${USERNAME}"
 # Docker install + configuration (profile-driven)
 if [ "$DOCKER_ENABLE" = "yes" ]; then
     echo "[*] Installing Docker..."
-    chroot "$CHROOT" ash -l -c "apk add --no-cache --no-interactive docker"
-    chroot "$CHROOT" ash -l -c "addgroup ${USERNAME} docker; rc-update add docker default"
+    chroot "$CHROOT" /bin/ash -l -c "apk add --no-cache --no-interactive docker"
+    chroot "$CHROOT" /bin/ash -l -c "addgroup ${USERNAME} docker; rc-update add docker default"
     echo "[*] Configuring Docker..."
     mkdir -p "$CHROOT/etc/docker"
     cat > "$CHROOT/etc/docker/daemon.json" <<'DOCKEREOF'
@@ -326,14 +326,14 @@ EOF
 
     # Enable USB gadget service (controlled by USB_GADGET_ENABLED profile setting)
     if [ "$USB_GADGET_ENABLED" = "yes" ]; then
-        chroot "$CHROOT" ash -l -c "rc-update add usb-gadget default" || true
+        chroot "$CHROOT" /bin/ash -l -c "rc-update add usb-gadget default" || true
     fi
 fi
 
 # Expand rootfs on first boot
 install -Dm0755 configs/expand-rootfs/expand-rootfs.sh "$CHROOT/usr/sbin/expand-rootfs.sh"
 install -Dm0755 configs/expand-rootfs/expand-rootfs.init "$CHROOT/etc/init.d/expand-rootfs"
-chroot "$CHROOT" ash -l -c "rc-update add expand-rootfs boot" || true
+chroot "$CHROOT" /bin/ash -l -c "rc-update add expand-rootfs boot" || true
 
 # zram swap (compressed in-RAM swap, ~256MB effective headroom)
 echo "[*] Configuring zram swap..."

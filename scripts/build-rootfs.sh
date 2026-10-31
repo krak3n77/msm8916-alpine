@@ -100,7 +100,7 @@ echo "[*] Bootstrapping Alpine Linux..."
 "$STAGING/apk.static" add -p "$CHROOT" --initdb -U --arch aarch64 --allow-untrusted alpine-base
 
 echo "[*] Installing packages..."
-chroot "$CHROOT" ash -l -c "
+chroot "$CHROOT" /bin/ash -l -c "
 apk add --no-cache --no-interactive --allow-untrusted postmarketos-keys
 apk add --no-cache --no-interactive \
     openrc \

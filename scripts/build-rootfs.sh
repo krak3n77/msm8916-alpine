@@ -125,19 +125,19 @@ apk add --no-cache --no-interactive \
 if [ -n "${PROFILE_PACKAGES:-}" ]; then
     _PPKG_LIST="$(echo "$PROFILE_PACKAGES" | tr '\n' ' ' | tr -s ' ')"
     echo "[*] Installing profile packages (${PROFILE:-default}): ${_PPKG_LIST}"
-    chroot "$CHROOT" ash -l -c "apk add --no-cache --no-interactive ${_PPKG_LIST}"
+    chroot "$CHROOT" /bin/ash -l -c "apk add --no-cache --no-interactive ${_PPKG_LIST}"
 fi
 
 # Install extra packages from variables.env (user/local overrides)
 if [ -n "${PACKAGES:-}" ]; then
     _PKG_LIST="$(echo "$PACKAGES" | tr '\n' ' ' | tr -s ' ')"
     echo "[*] Installing user packages..."
-    chroot "$CHROOT" ash -l -c "apk add --no-cache --no-interactive ${_PKG_LIST}"
+    chroot "$CHROOT" /bin/ash -l -c "apk add --no-cache --no-interactive ${_PKG_LIST}"
 fi
 
 # Setup Alpine
 echo "[*] Setting up Alpine..."
-chroot "$CHROOT" ash -l -c "
+chroot "$CHROOT" /bin/ash -l -c "
 # Create user
 echo ${USERNAME}:${PASSWORD}::::/home/${USERNAME}:/bin/bash | newusers
 
